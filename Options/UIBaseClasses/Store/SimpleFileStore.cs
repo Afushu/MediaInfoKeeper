@@ -32,7 +32,9 @@ namespace MediaInfoKeeper.Options.UIBaseClasses.Store
             "CurrentVersion",
             "LatestReleaseVersion",
             "ReleaseHistoryBody",
-            "DebugMediaInfoUrl"
+            "DebugMediaInfoUrl",
+            "ProxyLatencyStatus",
+            "ShowProxyLatencyStatus"
         };
 
         private readonly ILogger logger;

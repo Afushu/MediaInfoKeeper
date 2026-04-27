@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Emby.Web.GenericEdit;
+using Emby.Web.GenericEdit.Elements;
 using Emby.Web.GenericEdit.Editors;
 using MediaBrowser.Model.GenericEdit;
 using MediaBrowser.Model.Attributes;
@@ -23,11 +24,14 @@ namespace MediaInfoKeeper.Options
         [DisplayName("启用代理")]
         [Description("开启后将使用代理；如果下方域名列表留空，则所有 HttpClient 请求都走代理。")]
         public bool EnableProxyServer { get; set; } = false;
-
+        
         [DisplayName("代理服务器地址")]
-        [Description("示例：http://user:pass@127.0.0.1:7890 或 socks5://127.0.0.1:1080")]
+        [Description("示例：http://user:pass@127.0.0.1:7890 或 https://127.0.0.1:7890。保存时会通过该代理访问 Google generate_204 进行可用性测试。")]
         public string ProxyServerUrl { get; set; } = "http://127.0.0.1:7890";
 
+        [VisibleCondition(nameof(ShowProxyLatencyStatus), SimpleCondition.IsTrue)]
+        public StatusItem ProxyLatencyStatus { get; set; } = new StatusItem();
+        
         [DisplayName("需要使用代理的域名")]
         [Description("每行一个域名，也可使用 ; 或 , 分隔，命中该域名及其子域名时才会走代理。留空表示所有 Emby 内部 HttpClient 请求都走代理。")]
         [EditMultiline(6)]
@@ -56,6 +60,9 @@ namespace MediaInfoKeeper.Options
         [DisplayName("自定义 TMDB API 密钥")]
         [Description("请自备 API 密钥，留空使用Emby默认。")]
         public string AlternativeTmdbApiKey { get; set; } = string.Empty;
+
+        [Browsable(false)]
+        public bool ShowProxyLatencyStatus { get; set; } = false;
 
         public override IEditObjectContainer CreateEditContainer()
         {
@@ -115,6 +122,7 @@ namespace MediaInfoKeeper.Options
             AddGroup("Proxy","代理服务器相关设置",
                 nameof(EnableProxyServer),
                 nameof(ProxyServerUrl),
+                nameof(ProxyLatencyStatus),
                 nameof(ProxyDomains),
                 nameof(IgnoreCertificateValidation),
                 nameof(WriteProxyEnvVars),
