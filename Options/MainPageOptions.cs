@@ -26,34 +26,12 @@ namespace MediaInfoKeeper.Options
         [DisplayName("启用插件")]
         [Description("关闭后将不执行任何行为。")]
         public bool PlugginEnabled { get; set; } = true;
-        
+
         [DisplayName("Emby入库扫描延迟（秒）")]
         [Description("控制 Emby 实时入库扫描的等待时间，Emby 默认值 90s。光速入库，不建议小于10s。")]
         [MinValue(5), MaxValue(90)]
         public int FileChangeRefreshDelaySeconds { get; set; } = 15;
         
-        [Browsable(false)]
-        [DisplayName("入库时提取媒体信息")]
-        [Description("入库时若 JSON 不存在或恢复失败，提取媒体信息并写入 JSON。")]
-        public bool ExtractMediaInfoOnItemAdded { get; set; } = true;
-
-        [Browsable(false)]
-        [DisplayName("条目移除时删除 JSON")]
-        [Description("启用后，条目移除时删除已持久化的 JSON。")]
-        public bool DeleteMediaInfoJsonOnRemove { get; set; } = false;
-
-        [Browsable(false)]
-        [DisplayName("MediaInfo JSON 存储根目录")]
-        [Description("默认使用 Emby的 /config/data/MediaInfoKeeper 子目录保存。视频等媒体保存在 /your-path/FileNameWithoutExtension-mediainfo.json；音频保存在 /your-path/music/FileNameWithoutExtension-mediainfo.json。若当前值为空，JSON 保存到媒体文件同目录。")]
-        [EditFolderPicker]
-        public string MediaInfoJsonRootFolder { get; set; } = MediaInfoOptions.GetDefaultMediaInfoJsonRootFolder();
-
-        [Browsable(false)]
-        [DisplayName("扫描最多并发数")]
-        [Description("设置插件刷新任务的最大并发数，媒体信息提取和元数据刷新共用此限制，默认 3。")]
-        [MinValue(1), MaxValue(20)]
-        public int MaxConcurrentCount { get; set; } = 3;
-
         [Browsable(false)]
         public IEnumerable<EditorSelectOption> LibraryList { get; set; }
 

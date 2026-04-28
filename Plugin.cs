@@ -348,7 +348,6 @@ namespace MediaInfoKeeper
             }
 
             netWorkOptions.CustomLocalDiscoveryAddress = normalizedDiscoveryAddress;
-            options.Proxy = null;
             return true;
         }
 
@@ -425,10 +424,17 @@ namespace MediaInfoKeeper
             {
                 return;
             }
+
             var entries = BuildOptionLogEntries(options);
+            this.lastLoggedOptionsSnapshot = CreateOptionSnapshot(entries);
+
+            if (options.Enhance?.LogOptionsOnStartup != true)
+            {
+                return;
+            }
+
             this.logger.Info($"{this.Name} 配置{action}。");
             LogOptionEntries(entries);
-            this.lastLoggedOptionsSnapshot = CreateOptionSnapshot(entries);
         }
 
         private void LogOptionsChanges(PluginConfiguration options, string action)
@@ -476,14 +482,9 @@ namespace MediaInfoKeeper
             return new List<OptionLogEntry>
             {
                 new OptionLogEntry("Main.PlugginEnabled", "Main", "启用插件", options.MainPage.PlugginEnabled.ToString()),
-                new OptionLogEntry("MediaInfo.ExtractMediaInfoOnItemAdded", "MediaInfo", "入库时提取媒体信息", mediaInfoOptions.ExtractMediaInfoOnItemAdded.ToString()),
                 new OptionLogEntry("Main.StrmFileWatcher", "Main", "启用 Strm 新入库监听", "开"),
-                new OptionLogEntry("MediaInfo.MediaInfoJsonRootFolder", "MediaInfo", "MediaInfo JSON 存储根目录", FormatOptionValue(mediaInfoOptions.MediaInfoJsonRootFolder)),
-                new OptionLogEntry("MediaInfo.DeleteMediaInfoJsonOnRemove", "MediaInfo", "条目移除时删除 JSON", mediaInfoOptions.DeleteMediaInfoJsonOnRemove.ToString()),
-                new OptionLogEntry("MediaInfo.EnableMediaInfoPrefetch", "MediaInfo", "启用 MediaInfo 预加载", mediaInfoOptions.EnableMediaInfoPrefetch.ToString()),
                 new OptionLogEntry("Main.CatchupLibraries", "Main", "追更媒体库", FormatOptionValue(options.MainPage.CatchupLibraries)),
                 new OptionLogEntry("Main.ScheduledTaskLibraries", "Main", "计划任务媒体库", FormatOptionValue(options.MainPage.ScheduledTaskLibraries)),
-                new OptionLogEntry("MediaInfo.MaxConcurrentCount", "MediaInfo", "扫描最多并发数", mediaInfoOptions.MaxConcurrentCount.ToString()),
                 new OptionLogEntry(
                     "Main.FileChangeRefreshDelaySeconds",
                     "Main",
@@ -491,6 +492,13 @@ namespace MediaInfoKeeper
                     options.MainPage.FileChangeRefreshDelaySeconds < 0
                         ? "已禁用覆盖"
                         : $"{options.MainPage.FileChangeRefreshDelaySeconds} 秒"),
+
+                new OptionLogEntry("MediaInfo.ExtractMediaInfoOnItemAdded", "MediaInfo", "入库时提取媒体信息", mediaInfoOptions.ExtractMediaInfoOnItemAdded.ToString()),
+                new OptionLogEntry("MediaInfo.MediaInfoJsonRootFolder", "MediaInfo", "MediaInfo JSON 存储根目录", FormatOptionValue(mediaInfoOptions.MediaInfoJsonRootFolder)),
+                new OptionLogEntry("MediaInfo.DeleteMediaInfoJsonOnRemove", "MediaInfo", "条目移除时删除 JSON", mediaInfoOptions.DeleteMediaInfoJsonOnRemove.ToString()),
+                new OptionLogEntry("MediaInfo.EnableMediaInfoPrefetch", "MediaInfo", "启用 MediaInfo 预加载", mediaInfoOptions.EnableMediaInfoPrefetch.ToString()),
+                new OptionLogEntry("MediaInfo.MaxConcurrentCount", "MediaInfo", "扫描最多并发数", mediaInfoOptions.MaxConcurrentCount.ToString()),
+
                 new OptionLogEntry("IntroSkip.UnlockIntroSkip", "IntroSkip", "启用 Strm 片头检测解锁", options.IntroSkip.UnlockIntroSkip.ToString()),
                 new OptionLogEntry("IntroSkip.ScanIntroOnItemAdded", "IntroSkip", "入库时扫描片头", options.IntroSkip.ScanIntroOnItemAdded.ToString()),
                 new OptionLogEntry("IntroSkip.ScanIntroOnFavorite", "IntroSkip", "收藏时扫描片头", options.IntroSkip.ScanIntroOnFavorite.ToString()),
@@ -518,7 +526,9 @@ namespace MediaInfoKeeper
                 new OptionLogEntry("Enhance.ExcludeOriginalTitleFromSearch", "Enhance", "排除原始标题", options.Enhance.ExcludeOriginalTitleFromSearch.ToString()),
                 new OptionLogEntry("Enhance.SystemLogNameBlacklist", "Enhance", "日志来源黑名单", FormatOptionValue(options.Enhance.SystemLogNameBlacklist)),
                 new OptionLogEntry("Enhance.EnableDetailedNetworkRequestLogging", "Enhance", "日志显示详细网络请求", options.Enhance.EnableDetailedNetworkRequestLogging.ToString()),
+                new OptionLogEntry("Enhance.LogOptionsOnStartup", "Enhance", "启动时输出配置日志", options.Enhance.LogOptionsOnStartup.ToString()),
                 new OptionLogEntry("Enhance.EnableSystemLogReverse", "Enhance", "系统日志倒序显示", options.Enhance.EnableSystemLogReverse.ToString()),
+
                 new OptionLogEntry("MetaData.MetadataChangeWatcher", "MetaData", "启用剧集元数据变动监听", "开"),
                 new OptionLogEntry("MetaData.EnableAlternativeTitleFallback", "MetaData", "启用 TMDB 中文回退", options.MetaData.EnableAlternativeTitleFallback.ToString()),
                 new OptionLogEntry("MetaData.EnablePersonRoleDoubanFallback", "MetaData", "启用豆瓣角色中文化", options.MetaData.EnablePersonRoleDoubanFallback.ToString()),
@@ -536,11 +546,13 @@ namespace MediaInfoKeeper
                 new OptionLogEntry("MetaData.EnableOriginalPoster", "MetaData", "优先原语言海报", options.MetaData.EnableOriginalPoster.ToString()),
                 new OptionLogEntry("MetaData.EnableLocalEpisodeGroup", "MetaData", "启用本地剧集组文件", options.MetaData.EnableLocalEpisodeGroup.ToString()),
                 new OptionLogEntry("MetaData.EnableImageCapture", "MetaData", "启用图片提取", options.MetaData.EnableImageCapture.ToString()),
+
                 new OptionLogEntry("GitHub.GitHubToken", "GitHub", "GitHub 访问令牌", FormatSecretValue(options.GitHub.GitHubToken)),
                 new OptionLogEntry("GitHub.DownloadUrlPrefix", "GitHub", "下载前缀", FormatOptionValue(options.GitHub.DownloadUrlPrefix)),
                 new OptionLogEntry("GitHub.UpdateChannel", "GitHub", "更新频道", FormatOptionValue(options.GitHub.UpdateChannel)),
                 new OptionLogEntry("GitHub.CurrentVersion", "GitHub", "当前版本", FormatOptionValue(options.GitHub.CurrentVersion)),
                 new OptionLogEntry("GitHub.LatestReleaseVersion", "GitHub", "最新版本", FormatOptionValue(options.GitHub.LatestReleaseVersion)),
+
                 new OptionLogEntry("NetWork.EnableProxyServer", "NetWork", "启用代理", netWorkOptions.EnableProxyServer.ToString()),
                 new OptionLogEntry("NetWork.ProxyServerUrl", "NetWork", "代理服务器地址", FormatOptionValue(netWorkOptions.ProxyServerUrl)),
                 new OptionLogEntry("NetWork.ProxyDomains", "NetWork", "需要使用代理的域名", FormatOptionValue(netWorkOptions.ProxyDomains)),
