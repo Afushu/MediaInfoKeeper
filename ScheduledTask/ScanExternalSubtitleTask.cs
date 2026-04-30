@@ -22,7 +22,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "8.扫描外挂字幕";
 
-        public string Description => "对计划任务范围内的视频独立扫描外挂字幕，发现变更时更新字幕媒体流。";
+        public string Description => "按本任务配置的媒体库范围独立扫描外挂字幕，发现变更时更新字幕媒体流。";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -85,7 +85,8 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchScopedItems()
         {
-            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems();
+            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(
+                Plugin.Instance.Options.MainPage.ScanExternalSubtitleLibraries);
             this.logger.Info($"外挂字幕扫描条目数 {items.Count}");
             return items;
         }

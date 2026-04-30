@@ -24,7 +24,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "9.下载弹幕";
 
-        public string Description => "按计划任务媒体库范围，使用“最近入库时间窗口（天）”筛选（0=不限制），为电影和剧集下载弹幕。";
+        public string Description => "按本任务配置的媒体库范围与最近入库时间窗口，为电影和剧集下载弹幕。";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -92,14 +92,16 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchRecentScopedItems()
         {
-            var cutoff = Plugin.Instance.Options.MainPage.RecentItemsDays > 0
-                ? ConfiguredDateTime.Now.AddDays(-Plugin.Instance.Options.MainPage.RecentItemsDays)
+            var taskScope = Plugin.Instance.Options.MainPage.DownloadDanmuXmlLibraries;
+            var days = Plugin.Instance.Options.MainPage.DownloadDanmuXmlDays;
+            var cutoff = days > 0
+                ? ConfiguredDateTime.Now.AddDays(-days)
                 : (DateTime?)null;
-            var items = Plugin.LibraryService.FetchRecentScheduledTaskLibraryItems(cutoff, true)
+            var items = Plugin.LibraryService.FetchRecentScheduledTaskLibraryItems(taskScopedLibraries: taskScope, cutoff: cutoff, orderByDateCreatedDesc: true)
                 .Where(item => item is MediaBrowser.Controller.Entities.TV.Episode || item is MediaBrowser.Controller.Entities.Movies.Movie)
                 .ToList();
 
-            this.logger.Info($"弹幕下载计划任务条目数: {items.Count}, 天数窗口: {(cutoff == null ? "不限制" : Plugin.Instance.Options.MainPage.RecentItemsDays.ToString())}");
+            this.logger.Info($"弹幕下载计划任务条目数: {items.Count}, 天数窗口: {(cutoff == null ? "不限制" : days.ToString())}");
             return items;
         }
     }

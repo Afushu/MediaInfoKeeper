@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using MediaInfoKeeper.Common;
 using MediaInfoKeeper.Options;
@@ -240,6 +241,7 @@ namespace MediaInfoKeeper
             get
             {
                 var options = this.OptionsStore.GetOptions();
+                EnsureMainPageTaskOptionValues(options);
                 options.MainPage ??= new MainPageOptions();
                 options.GetMediaInfoOptions();
                 return options;
@@ -286,6 +288,7 @@ namespace MediaInfoKeeper
                 return;
             }
 
+            EnsureMainPageTaskOptionValues(options);
             options.MainPage ??= new MainPageOptions();
             options.GetMediaInfoOptions();
             options.IntroSkip ??= new IntroSkipOptions();
@@ -328,6 +331,13 @@ namespace MediaInfoKeeper
 
             options.MainPage.CatchupLibraries = NormalizeScopedLibraries(options.MainPage.CatchupLibraries);
             options.MainPage.ScheduledTaskLibraries = NormalizeScopedLibraries(options.MainPage.ScheduledTaskLibraries);
+            options.MainPage.RefreshRecentMetadataLibraries = NormalizeScopedLibraries(options.MainPage.RefreshRecentMetadataLibraries);
+            options.MainPage.ScanRecentIntroLibraries = NormalizeScopedLibraries(options.MainPage.ScanRecentIntroLibraries);
+            options.MainPage.ExtractRecentMediaInfoLibraries = NormalizeScopedLibraries(options.MainPage.ExtractRecentMediaInfoLibraries);
+            options.MainPage.ExportExistingMediaInfoLibraries = NormalizeScopedLibraries(options.MainPage.ExportExistingMediaInfoLibraries);
+            options.MainPage.RestoreMediaInfoLibraries = NormalizeScopedLibraries(options.MainPage.RestoreMediaInfoLibraries);
+            options.MainPage.ScanExternalSubtitleLibraries = NormalizeScopedLibraries(options.MainPage.ScanExternalSubtitleLibraries);
+            options.MainPage.DownloadDanmuXmlLibraries = NormalizeScopedLibraries(options.MainPage.DownloadDanmuXmlLibraries);
             if (options.IntroSkip != null)
             {
                 options.IntroSkip.LibraryScope = NormalizeScopedLibraries(options.IntroSkip.LibraryScope);
@@ -485,6 +495,20 @@ namespace MediaInfoKeeper
                 new OptionLogEntry("Main.StrmFileWatcher", "Main", "启用 Strm 新入库监听", "开"),
                 new OptionLogEntry("Main.CatchupLibraries", "Main", "追更媒体库", FormatOptionValue(options.MainPage.CatchupLibraries)),
                 new OptionLogEntry("Main.ScheduledTaskLibraries", "Main", "计划任务媒体库", FormatOptionValue(options.MainPage.ScheduledTaskLibraries)),
+                new OptionLogEntry("Main.RefreshRecentMetadataLibraries", "Main", "刷新媒体元数据范围", FormatOptionValue(options.MainPage.RefreshRecentMetadataLibraries)),
+                new OptionLogEntry("Main.RefreshRecentMetadataDays", "Main", "刷新媒体元数据时间窗口", FormatTaskIntDisplayValue(options.MainPage.RefreshRecentMetadataDays, true)),
+                new OptionLogEntry("Main.RefreshMetadataMode", "Main", "刷新模式", options.MainPage.RefreshMetadataMode.ToString()),
+                new OptionLogEntry("Main.ReplaceExistingImages", "Main", "替换现有图像", options.MainPage.ReplaceExistingImages.ToString()),
+                new OptionLogEntry("Main.ReplaceExistingVideoPreviewThumbnails", "Main", "替换现有视频预览缩略图", options.MainPage.ReplaceExistingVideoPreviewThumbnails.ToString()),
+                new OptionLogEntry("Main.ScanRecentIntroLibraries", "Main", "扫描片头范围", FormatOptionValue(options.MainPage.ScanRecentIntroLibraries)),
+                new OptionLogEntry("Main.ScanRecentIntroLimit", "Main", "扫描片头最近条目数量", FormatTaskIntDisplayValue(options.MainPage.ScanRecentIntroLimit, false)),
+                new OptionLogEntry("Main.ExtractRecentMediaInfoLibraries", "Main", "提取媒体信息范围", FormatOptionValue(options.MainPage.ExtractRecentMediaInfoLibraries)),
+                new OptionLogEntry("Main.ExtractRecentMediaInfoLimit", "Main", "提取媒体信息最近条目数量", FormatTaskIntDisplayValue(options.MainPage.ExtractRecentMediaInfoLimit, false)),
+                new OptionLogEntry("Main.ExportExistingMediaInfoLibraries", "Main", "备份媒体信息范围", FormatOptionValue(options.MainPage.ExportExistingMediaInfoLibraries)),
+                new OptionLogEntry("Main.RestoreMediaInfoLibraries", "Main", "恢复媒体信息范围", FormatOptionValue(options.MainPage.RestoreMediaInfoLibraries)),
+                new OptionLogEntry("Main.ScanExternalSubtitleLibraries", "Main", "扫描外挂字幕范围", FormatOptionValue(options.MainPage.ScanExternalSubtitleLibraries)),
+                new OptionLogEntry("Main.DownloadDanmuXmlLibraries", "Main", "下载弹幕范围", FormatOptionValue(options.MainPage.DownloadDanmuXmlLibraries)),
+                new OptionLogEntry("Main.DownloadDanmuXmlDays", "Main", "下载弹幕时间窗口", FormatTaskIntDisplayValue(options.MainPage.DownloadDanmuXmlDays, true)),
                 new OptionLogEntry(
                     "Main.FileChangeRefreshDelaySeconds",
                     "Main",
@@ -621,9 +645,88 @@ namespace MediaInfoKeeper
             return string.IsNullOrWhiteSpace(value) ? "空" : value;
         }
 
+        private static string FormatTaskIntDisplayValue(int value, bool zeroMeansUnlimited)
+        {
+            if (zeroMeansUnlimited && value == 0)
+            {
+                return "不限制";
+            }
+
+            return value.ToString();
+        }
+
         private static string FormatSecretValue(string value)
         {
             return string.IsNullOrEmpty(value) ? "空" : "***";
+        }
+
+        private void EnsureMainPageTaskOptionValues(PluginConfiguration options)
+        {
+            if (options == null)
+            {
+                return;
+            }
+
+            options.MainPage ??= new MainPageOptions();
+            var root = LoadPersistedOptionsRoot();
+            var mainPageNode = root?["MainPage"] as JsonObject;
+
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.RefreshRecentMetadataLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.RefreshRecentMetadataLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ScanRecentIntroLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ScanRecentIntroLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ExtractRecentMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ExtractRecentMediaInfoLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ExportExistingMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ExportExistingMediaInfoLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.RestoreMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.RestoreMediaInfoLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ScanExternalSubtitleLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ScanExternalSubtitleLibraries = value);
+            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.DownloadDanmuXmlLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.DownloadDanmuXmlLibraries = value);
+
+            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.RefreshRecentMetadataDays), options.MainPage.RecentItemsDays, value => options.MainPage.RefreshRecentMetadataDays = value);
+            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.ScanRecentIntroLimit), options.MainPage.RecentItemsLimit, value => options.MainPage.ScanRecentIntroLimit = value);
+            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.ExtractRecentMediaInfoLimit), options.MainPage.RecentItemsLimit, value => options.MainPage.ExtractRecentMediaInfoLimit = value);
+            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.DownloadDanmuXmlDays), options.MainPage.RecentItemsDays, value => options.MainPage.DownloadDanmuXmlDays = value);
+        }
+
+        private JsonObject LoadPersistedOptionsRoot()
+        {
+            try
+            {
+                if (!File.Exists(this.OptionsStore.OptionsFilePath))
+                {
+                    return null;
+                }
+
+                var json = File.ReadAllText(this.OptionsStore.OptionsFilePath);
+                return JsonNode.Parse(json) as JsonObject;
+            }
+            catch (Exception ex)
+            {
+                this.logger.Warn("读取配置 JSON 失败，回退到当前对象值：{0}", ex.Message);
+                return null;
+            }
+        }
+
+        private static void BackfillTaskScopeIfMissing(JsonObject mainPageNode, string propertyName, string fallbackValue, Action<string> setter)
+        {
+            if (HasJsonProperty(mainPageNode, propertyName))
+            {
+                return;
+            }
+
+            setter(fallbackValue ?? string.Empty);
+        }
+
+        private static void BackfillTaskIntIfMissing(JsonObject mainPageNode, string propertyName, int fallbackValue, Action<int> setter)
+        {
+            if (HasJsonProperty(mainPageNode, propertyName))
+            {
+                return;
+            }
+
+            setter(fallbackValue);
+        }
+
+        private static bool HasJsonProperty(JsonObject jsonObject, string propertyName)
+        {
+            return jsonObject != null && jsonObject.ContainsKey(propertyName);
         }
         private string NormalizeScopedLibraries(string raw)
         {

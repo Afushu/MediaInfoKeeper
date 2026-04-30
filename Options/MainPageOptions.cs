@@ -42,34 +42,101 @@ namespace MediaInfoKeeper.Options
         public string CatchupLibraries { get; set; } = string.Empty;
 
         [DisplayName("计划任务媒体库")]
-        [Description("用于计划任务范围；留空表示全部。")]
+        [Description("计划任务默认范围；各任务未单独设置时继承这里。留空表示全部。")]
         [EditMultilSelect]
         [SelectItemsSource(nameof(LibraryList))]
+        [Browsable(false)]
         public string ScheduledTaskLibraries { get; set; } = string.Empty;
 
+        [Browsable(false)]
         [DisplayName("最近入库时间窗口（天）")]
-        [Description("用于“刷新媒体元数据”计划任务，仅处理指定天数内入库的条目，0 表示不限制。")]
+        [Description("计划任务默认时间窗口；对应任务未单独设置时继承这里，0 表示不限制。")]
         [MinValue(0)]
         [MaxValue(3650)]
         public int RecentItemsDays { get; set; } = 3;
 
+        [Browsable(false)]
         [DisplayName("最近入库媒体筛选数量")]
-        [Description("用于“提取媒体信息、扫描片头”计划任务，默认 100。")]
+        [Description("计划任务默认最近条目数量；对应任务未单独设置时继承这里。")]
         [MinValue(1)]
         [MaxValue(100000000)]
         public int RecentItemsLimit { get; set; } = 100;
+
+        [DisplayName("媒体库范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string RefreshRecentMetadataLibraries { get; set; } = string.Empty;
+
+        [DisplayName("刷新最近入库时间窗口（天）")]
+        [Description("仅处理指定天数内入库的条目，0 表示不限制。")]
+        [MinValue(0)]
+        [MaxValue(3650)]
+        public int RefreshRecentMetadataDays { get; set; } = 3;
 
         [DisplayName("刷新模式")]
         [Description("依据 Emby 媒体库中的设置和元数据提供器，用新的数据更新元数据。")]
         public RefreshModeOption RefreshMetadataMode { get; set; } = RefreshModeOption.Fill;
 
         [DisplayName("替换现有图像")]
-        [Description("基于媒体库选项，将删除全部现有图像，并下载新图像。在某些情况下，这可能会导致可用图像比以前更少。")]
+        [Description("基于媒体库选项，将删除全部现有图像，并下载新图像。")]
         public bool ReplaceExistingImages { get; set; } = true;
 
         [DisplayName("替换现有视频预览缩略图")]
-        [Description("如果在媒体库选项中启用此功能，将删除所有现有视频预览缩略图并生成新缩略图。")]
+        [Description("如果在媒体库选项中启用此功能，将删除现有视频预览缩略图并生成新的缩略图。")]
         public bool ReplaceExistingVideoPreviewThumbnails { get; set; } = true;
+
+        [DisplayName("媒体库范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string ScanRecentIntroLibraries { get; set; } = string.Empty;
+
+        [DisplayName("扫描最近条目数量")]
+        [MinValue(1)]
+        [MaxValue(100000000)]
+        public int ScanRecentIntroLimit { get; set; } = 100;
+
+        [DisplayName("媒体库范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string ExtractRecentMediaInfoLibraries { get; set; } = string.Empty;
+
+        [DisplayName("提取最近条目数量")]
+        [MinValue(1)]
+        [MaxValue(100000000)]
+        public int ExtractRecentMediaInfoLimit { get; set; } = 100;
+
+        [DisplayName("备份媒体信息范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string ExportExistingMediaInfoLibraries { get; set; } = string.Empty;
+
+        [DisplayName("恢复媒体信息范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string RestoreMediaInfoLibraries { get; set; } = string.Empty;
+
+        [DisplayName("扫描外挂字幕范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string ScanExternalSubtitleLibraries { get; set; } = string.Empty;
+
+        [DisplayName("媒体库范围")]
+        [Description("留空表示全部。")]
+        [EditMultilSelect]
+        [SelectItemsSource(nameof(LibraryList))]
+        public string DownloadDanmuXmlLibraries { get; set; } = string.Empty;
+
+        [DisplayName("下载最近入库时间窗口（天）")]
+        [Description("仅处理指定天数内入库的条目，0 表示不限制。")]
+        [MinValue(0)]
+        [MaxValue(3650)]
+        public int DownloadDanmuXmlDays { get; set; } = 3;
 
         public override IEditObjectContainer CreateEditContainer()
         {
@@ -110,11 +177,6 @@ namespace MediaInfoKeeper.Options
                     }
                 }
 
-                if (items.Count == 0)
-                {
-                    return;
-                }
-
                 groupIndex++;
                 var group = new EditorGroup(title, items.ToArray(), $"group{groupIndex}", root.Id, null)
                 {
@@ -125,18 +187,35 @@ namespace MediaInfoKeeper.Options
 
             AddGroup("插件", "",
                 nameof(PlugginEnabled),
-                nameof(FileChangeRefreshDelaySeconds));
+                nameof(FileChangeRefreshDelaySeconds),
+                nameof(CatchupLibraries));
 
-            AddGroup("媒体库范围", "限制生效媒体库范围",
-                nameof(CatchupLibraries),
-                nameof(ScheduledTaskLibraries));
-
-            AddGroup("计划任务", "计划任务中，各项任务用到的参数设置",
-                nameof(RecentItemsDays),
-                nameof(RecentItemsLimit),
+            AddGroup("计划任务配置","参数配置");
+            
+            AddGroup("刷新媒体元数据", "",
+                nameof(RefreshRecentMetadataDays),
                 nameof(RefreshMetadataMode),
                 nameof(ReplaceExistingImages),
-                nameof(ReplaceExistingVideoPreviewThumbnails));
+                nameof(ReplaceExistingVideoPreviewThumbnails),
+                nameof(RefreshRecentMetadataLibraries));
+
+            AddGroup("扫描片头", "",
+                nameof(ScanRecentIntroLimit),
+                nameof(ScanRecentIntroLibraries));
+
+            AddGroup("提取媒体信息", "",
+                nameof(ExtractRecentMediaInfoLimit),
+                nameof(ExtractRecentMediaInfoLibraries));
+            
+            AddGroup("下载弹幕", "",
+                nameof(DownloadDanmuXmlDays),
+                nameof(DownloadDanmuXmlLibraries));
+            
+            AddGroup("其他计划任务", "",
+                nameof(ExportExistingMediaInfoLibraries),
+                nameof(RestoreMediaInfoLibraries),
+                nameof(ScanExternalSubtitleLibraries));
+
 
             var remaining = new List<EditorBase>();
             foreach (var item in root.EditorItems)

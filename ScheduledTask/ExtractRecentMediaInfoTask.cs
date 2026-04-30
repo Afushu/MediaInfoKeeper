@@ -29,7 +29,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "4.提取媒体信息";
 
-        public string Description => "计划任务媒体库范围内，按入库时间倒序取最近 N 条（“最近入库媒体筛选数量”）恢复/提取媒体信息并写入 JSON。（已存在则恢复）";
+        public string Description => "按本任务配置的媒体库范围，取最近条目提取媒体信息并写入 JSON。（已存在则恢复）";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -91,8 +91,12 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchRecentScopedItems()
         {
-            var limit = Math.Max(1, Plugin.Instance.Options.MainPage.RecentItemsLimit);
-            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(true, limit, includeAudio: true);
+            var limit = Math.Max(1, Plugin.Instance.Options.MainPage.ExtractRecentMediaInfoLimit);
+            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(
+                Plugin.Instance.Options.MainPage.ExtractRecentMediaInfoLibraries,
+                true,
+                limit,
+                includeAudio: true);
             this.logger.Info($"计划任务条目数 {items.Count}");
             return items;
         }

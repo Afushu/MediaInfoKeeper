@@ -21,7 +21,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "5.备份媒体信息";
 
-        public string Description => "对计划任务范围内！已存在 MediaInfo 的条目导出 JSON，无 MediaInfo 则跳过。";
+        public string Description => "按本任务配置的媒体库范围，将已存在 MediaInfo 的条目导出为 JSON，无 MediaInfo 则跳过。";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -95,7 +95,9 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchScopedItems()
         {
-            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(includeAudio: true);
+            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(
+                Plugin.Instance.Options.MainPage.ExportExistingMediaInfoLibraries,
+                includeAudio: true);
             this.logger.Info($"计划任务条目数 {items.Count}");
             return items;
         }

@@ -307,10 +307,14 @@ namespace MediaInfoKeeper.Services
         }
 
         /// <summary>获取计划任务媒体库范围内的音视频条目。</summary>
-        public List<BaseItem> FetchScheduledTaskLibraryItems(bool orderByDateCreatedDesc = false, int? take = null, bool includeAudio = false)
+        public List<BaseItem> FetchScheduledTaskLibraryItems(
+            string taskScopedLibraries = null,
+            bool orderByDateCreatedDesc = false,
+            int? take = null,
+            bool includeAudio = false)
         {
             var scopePaths = GetScopedLibraryPaths(
-                Plugin.Instance.Options.MainPage.ScheduledTaskLibraries,
+                taskScopedLibraries ?? string.Empty,
                 out var hasScope);
             if (hasScope && scopePaths.Count == 0)
             {
@@ -321,9 +325,14 @@ namespace MediaInfoKeeper.Services
         }
 
         /// <summary>获取计划任务媒体库范围内、命中最近时间窗口的音视频条目。</summary>
-        public List<BaseItem> FetchRecentScheduledTaskLibraryItems(DateTime? cutoff, bool orderByDateCreatedDesc = true, int? take = null, bool includeAudio = false)
+        public List<BaseItem> FetchRecentScheduledTaskLibraryItems(
+            DateTime? cutoff,
+            string taskScopedLibraries = null,
+            bool orderByDateCreatedDesc = true,
+            int? take = null,
+            bool includeAudio = false)
         {
-            return FetchScheduledTaskLibraryItems(orderByDateCreatedDesc, take, includeAudio)
+            return FetchScheduledTaskLibraryItems(taskScopedLibraries, orderByDateCreatedDesc, take, includeAudio)
                 .Where(i => cutoff == null || i.DateCreated >= cutoff)
                 .ToList();
         }

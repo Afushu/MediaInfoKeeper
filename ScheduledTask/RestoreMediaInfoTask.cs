@@ -26,7 +26,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "6.恢复媒体信息";
 
-        public string Description => "对计划任务范围内！的条目,存在 JSON 则恢复，不存在则跳过";
+        public string Description => "按本任务配置的媒体库范围，存在 JSON 则恢复媒体信息，不存在则跳过。";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -88,7 +88,9 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchScopedItems()
         {
-            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(includeAudio: true);
+            var items = Plugin.LibraryService.FetchScheduledTaskLibraryItems(
+                Plugin.Instance.Options.MainPage.RestoreMediaInfoLibraries,
+                includeAudio: true);
             this.logger.Info($"计划任务条目数 {items.Count}");
             return items;
         }

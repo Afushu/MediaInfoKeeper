@@ -29,7 +29,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Name => "2.刷新媒体元数据";
 
-        public string Description => "计划任务媒体库范围内，按“最近入库时间窗口（天）”筛选（0=不限制），刷新元数据（可选覆盖或补全），之后会从 JSON 恢复媒体信息。";
+        public string Description => "按本任务配置的媒体库范围与最近入库时间窗口筛选条目，刷新元数据（可选覆盖或补全），之后会从 JSON 恢复媒体信息。";
 
         public string Category => Plugin.TaskCategoryName;
 
@@ -137,11 +137,17 @@ namespace MediaInfoKeeper.ScheduledTask
 
         private List<BaseItem> FetchRecentItems()
         {
-            var cutoff = Plugin.Instance.Options.MainPage.RecentItemsDays > 0
-                ? ConfiguredDateTime.Now.AddDays(-Plugin.Instance.Options.MainPage.RecentItemsDays)
+            var taskScope = Plugin.Instance.Options.MainPage.RefreshRecentMetadataLibraries;
+            var days = Plugin.Instance.Options.MainPage.RefreshRecentMetadataDays;
+            var cutoff = days > 0
+                ? ConfiguredDateTime.Now.AddDays(-days)
                 : (DateTime?)null;
 
-            return Plugin.LibraryService.FetchRecentScheduledTaskLibraryItems(cutoff, true, includeAudio: true);
+            return Plugin.LibraryService.FetchRecentScheduledTaskLibraryItems(
+                cutoff,
+                taskScope,
+                true,
+                includeAudio: true);
         }
 
         private MetadataRefreshOptions BuildRefreshOptions(bool replaceMetadata, bool replaceImages, bool replaceThumbnails)
