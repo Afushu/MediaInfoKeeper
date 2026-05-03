@@ -541,7 +541,7 @@ namespace MediaInfoKeeper.Patch
                 return false;
             }
 
-            if (!IsExpired(entry.CreatedAt) &&
+            if (!IsExpired(entry.ExpiresAtUtc) &&
                 !string.IsNullOrWhiteSpace(entry.RedirectUrl) &&
                 entry.Reuse(redirectUrlCacheReuseLimit, playSessionId, out redirectUrl))
             {
@@ -556,20 +556,69 @@ namespace MediaInfoKeeper.Patch
         private static void CacheRedirectUrl(string cacheKey, string redirectUrl)
         {
             if (redirectUrlCacheDurationSeconds == 0 ||
-                string.IsNullOrWhiteSpace(cacheKey) || string.IsNullOrWhiteSpace(redirectUrl))
+                string.IsNullOrWhiteSpace(cacheKey) ||
+                string.IsNullOrWhiteSpace(redirectUrl) ||
+                !TryGetRedirectUrlExpiry(redirectUrl, out var expiresAtUtc))
             {
                 return;
             }
 
-            RedirectUrlCache[cacheKey] = new RedirectUrlCacheEntry(DateTimeOffset.UtcNow, redirectUrl);
+            RedirectUrlCache[cacheKey] = new RedirectUrlCacheEntry(DateTimeOffset.UtcNow, expiresAtUtc, redirectUrl);
             TrimRedirectUrlCacheIfNeeded();
         }
 
-        /// <summary>判断缓存项是否已超过配置的生存时间。</summary>
-        private static bool IsExpired(DateTimeOffset createdAt)
+        /// <summary>判断缓存项是否已超过 URL 自带的 t 失效时间。</summary>
+        private static bool IsExpired(DateTimeOffset expiresAtUtc)
         {
-            return redirectUrlCacheDurationSeconds > 0 &&
-                DateTimeOffset.UtcNow - createdAt > TimeSpan.FromSeconds(redirectUrlCacheDurationSeconds);
+            return DateTimeOffset.UtcNow >= expiresAtUtc;
+        }
+
+        /// <summary>从直链 URL 查询串中提取 Unix 时间戳参数 t，作为缓存失效时间。</summary>
+        private static bool TryGetRedirectUrlExpiry(string redirectUrl, out DateTimeOffset expiresAtUtc)
+        {
+            expiresAtUtc = default;
+            if (string.IsNullOrWhiteSpace(redirectUrl) ||
+                !Uri.TryCreate(redirectUrl, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            var rawQuery = uri.Query;
+            if (string.IsNullOrEmpty(rawQuery))
+            {
+                return false;
+            }
+
+            var query = rawQuery[0] == '?' ? rawQuery.Substring(1) : rawQuery;
+            foreach (var pair in query.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separatorIndex = pair.IndexOf('=');
+                var rawKey = separatorIndex >= 0 ? pair.Substring(0, separatorIndex) : pair;
+                if (!string.Equals(Uri.UnescapeDataString(rawKey), "t", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var rawValue = separatorIndex >= 0 && separatorIndex + 1 < pair.Length
+                    ? pair.Substring(separatorIndex + 1)
+                    : string.Empty;
+                if (!long.TryParse(Uri.UnescapeDataString(rawValue), out var unixSeconds) || unixSeconds <= 0)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    expiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+                    return expiresAtUtc > DateTimeOffset.UtcNow;
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return false;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>按最近最少使用原则裁剪直链缓存，只保留最近访问过的热点项。</summary>
@@ -920,14 +969,17 @@ namespace MediaInfoKeeper.Patch
             private string lastPlaySessionId;
             private long lastAccessedTicks;
 
-            public RedirectUrlCacheEntry(DateTimeOffset createdAt, string redirectUrl)
+            public RedirectUrlCacheEntry(DateTimeOffset createdAt, DateTimeOffset expiresAtUtc, string redirectUrl)
             {
                 CreatedAt = createdAt;
+                ExpiresAtUtc = expiresAtUtc;
                 RedirectUrl = redirectUrl;
                 lastAccessedTicks = createdAt.UtcTicks;
             }
 
             public DateTimeOffset CreatedAt { get; }
+
+            public DateTimeOffset ExpiresAtUtc { get; }
 
             public string RedirectUrl { get; }
 

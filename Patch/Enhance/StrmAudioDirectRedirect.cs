@@ -496,13 +496,62 @@ namespace MediaInfoKeeper.Patch
 
         private static void CacheRedirectUrl(string cacheKey, string redirectUrl)
         {
-            if (string.IsNullOrWhiteSpace(cacheKey) || string.IsNullOrWhiteSpace(redirectUrl))
+            if (string.IsNullOrWhiteSpace(cacheKey) ||
+                string.IsNullOrWhiteSpace(redirectUrl) ||
+                !TryGetRedirectUrlExpiry(redirectUrl, out var expiresAtUtc))
             {
                 return;
             }
 
-            RedirectUrlCache[cacheKey] = new RedirectUrlCacheEntry(redirectUrl, redirectUrlCacheDurationSeconds);
+            RedirectUrlCache[cacheKey] = new RedirectUrlCacheEntry(redirectUrl, expiresAtUtc);
             TrimRedirectUrlCacheIfNeeded();
+        }
+
+        private static bool TryGetRedirectUrlExpiry(string redirectUrl, out DateTimeOffset expiresAtUtc)
+        {
+            expiresAtUtc = default;
+            if (string.IsNullOrWhiteSpace(redirectUrl) ||
+                !Uri.TryCreate(redirectUrl, UriKind.Absolute, out var uri))
+            {
+                return false;
+            }
+
+            var rawQuery = uri.Query;
+            if (string.IsNullOrEmpty(rawQuery))
+            {
+                return false;
+            }
+
+            var query = rawQuery[0] == '?' ? rawQuery.Substring(1) : rawQuery;
+            foreach (var pair in query.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separatorIndex = pair.IndexOf('=');
+                var rawKey = separatorIndex >= 0 ? pair.Substring(0, separatorIndex) : pair;
+                if (!string.Equals(Uri.UnescapeDataString(rawKey), "t", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var rawValue = separatorIndex >= 0 && separatorIndex + 1 < pair.Length
+                    ? pair.Substring(separatorIndex + 1)
+                    : string.Empty;
+                if (!long.TryParse(Uri.UnescapeDataString(rawValue), out var unixSeconds) || unixSeconds <= 0)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    expiresAtUtc = DateTimeOffset.FromUnixTimeSeconds(unixSeconds);
+                    return expiresAtUtc > DateTimeOffset.UtcNow;
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    return false;
+                }
+            }
+
+            return false;
         }
 
         private static void TrimRedirectUrlCacheIfNeeded()
@@ -559,7 +608,7 @@ namespace MediaInfoKeeper.Patch
                 return null;
             }
 
-            return string.Concat(itemId, "::", userAgent ?? string.Empty);
+            return string.Concat(itemId, "|", userAgent ?? string.Empty);
         }
 
         private static string NormalizeRedirectUrl(string url)
@@ -644,16 +693,14 @@ namespace MediaInfoKeeper.Patch
 
         private sealed class RedirectUrlCacheEntry
         {
-            private readonly DateTimeOffset? expiresAtUtc;
+            private readonly DateTimeOffset expiresAtUtc;
 
-            public RedirectUrlCacheEntry(string url, int cacheDurationSeconds)
+            public RedirectUrlCacheEntry(string url, DateTimeOffset expiresAtUtc)
             {
                 Url = url;
                 LastAccessUtc = DateTimeOffset.UtcNow;
                 ReuseCount = 0;
-                expiresAtUtc = cacheDurationSeconds < 0
-                    ? null
-                    : DateTimeOffset.UtcNow.AddSeconds(cacheDurationSeconds);
+                this.expiresAtUtc = expiresAtUtc;
             }
 
             public string Url { get; }
@@ -664,7 +711,7 @@ namespace MediaInfoKeeper.Patch
 
             public bool IsExpired()
             {
-                return expiresAtUtc.HasValue && expiresAtUtc.Value <= DateTimeOffset.UtcNow;
+                return expiresAtUtc <= DateTimeOffset.UtcNow;
             }
 
             public void Touch()
