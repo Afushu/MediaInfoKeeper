@@ -91,26 +91,6 @@ namespace MediaInfoKeeper.Options
             public string ExtractRecentMediaInfoLibraries { get; set; } = string.Empty;
         }
 
-        public class DownloadDanmuXmlTaskEditorOptions : EditableOptionsBase
-        {
-            public override string EditorTitle => string.Empty;
-
-            [DisplayName("下载最近入库时间窗口（天）")]
-            [Description("仅处理指定天数内入库的条目，0 表示不限制。")]
-            [MinValue(0)]
-            [MaxValue(3650)]
-            public int DownloadDanmuXmlDays { get; set; } = 3;
-
-            [Browsable(false)]
-            public IEnumerable<EditorSelectOption> LibraryList { get; set; }
-
-            [DisplayName("媒体库范围")]
-            [Description("留空表示全部。")]
-            [EditMultilSelect]
-            [SelectItemsSource(nameof(LibraryList))]
-            public string DownloadDanmuXmlLibraries { get; set; } = string.Empty;
-        }
-
         public class ExportExistingMediaInfoTaskEditorOptions : EditableOptionsBase
         {
             public override string EditorTitle => string.Empty;
@@ -186,9 +166,6 @@ namespace MediaInfoKeeper.Options
 
             [DisplayName("提取媒体信息")]
             public ExtractRecentMediaInfoTaskEditorOptions ExtractRecentMediaInfo { get; set; } = new ExtractRecentMediaInfoTaskEditorOptions();
-
-            [DisplayName("下载弹幕")]
-            public DownloadDanmuXmlTaskEditorOptions DownloadDanmuXml { get; set; } = new DownloadDanmuXmlTaskEditorOptions();
 
             [DisplayName("备份媒体信息")]
             public ExportExistingMediaInfoTaskEditorOptions ExportExistingMediaInfo { get; set; } = new ExportExistingMediaInfoTaskEditorOptions();
@@ -321,20 +298,6 @@ namespace MediaInfoKeeper.Options
         [Browsable(false)]
         public string ScanExternalSubtitleLibraries { get; set; } = string.Empty;
 
-        [DisplayName("媒体库范围")]
-        [Description("留空表示全部。")]
-        [EditMultilSelect]
-        [SelectItemsSource(nameof(LibraryList))]
-        [Browsable(false)]
-        public string DownloadDanmuXmlLibraries { get; set; } = string.Empty;
-
-        [DisplayName("下载最近入库时间窗口（天）")]
-        [Description("仅处理指定天数内入库的条目，0 表示不限制。")]
-        [MinValue(0)]
-        [MaxValue(3650)]
-        [Browsable(false)]
-        public int DownloadDanmuXmlDays { get; set; } = 3;
-
         [Browsable(false)]
         public ScheduledTaskEditorOptions ScheduledTasksEditor { get; set; } = new ScheduledTaskEditorOptions();
 
@@ -363,11 +326,6 @@ namespace MediaInfoKeeper.Options
             ScheduledTasksEditor.ExtractRecentMediaInfo.LibraryList = LibraryList;
             ScheduledTasksEditor.ExtractRecentMediaInfo.ExtractRecentMediaInfoLimit = ExtractRecentMediaInfoLimit;
             ScheduledTasksEditor.ExtractRecentMediaInfo.ExtractRecentMediaInfoLibraries = ExtractRecentMediaInfoLibraries;
-
-            ScheduledTasksEditor.DownloadDanmuXml ??= new DownloadDanmuXmlTaskEditorOptions();
-            ScheduledTasksEditor.DownloadDanmuXml.LibraryList = LibraryList;
-            ScheduledTasksEditor.DownloadDanmuXml.DownloadDanmuXmlDays = DownloadDanmuXmlDays;
-            ScheduledTasksEditor.DownloadDanmuXml.DownloadDanmuXmlLibraries = DownloadDanmuXmlLibraries;
 
             ScheduledTasksEditor.ExportExistingMediaInfo ??= new ExportExistingMediaInfoTaskEditorOptions();
             ScheduledTasksEditor.ExportExistingMediaInfo.LibraryList = LibraryList;
@@ -414,12 +372,6 @@ namespace MediaInfoKeeper.Options
             {
                 ExtractRecentMediaInfoLimit = ScheduledTasksEditor.ExtractRecentMediaInfo.ExtractRecentMediaInfoLimit;
                 ExtractRecentMediaInfoLibraries = ScheduledTasksEditor.ExtractRecentMediaInfo.ExtractRecentMediaInfoLibraries ?? string.Empty;
-            }
-
-            if (ScheduledTasksEditor.DownloadDanmuXml != null)
-            {
-                DownloadDanmuXmlDays = ScheduledTasksEditor.DownloadDanmuXml.DownloadDanmuXmlDays;
-                DownloadDanmuXmlLibraries = ScheduledTasksEditor.DownloadDanmuXml.DownloadDanmuXmlLibraries ?? string.Empty;
             }
 
             if (ScheduledTasksEditor.ExportExistingMediaInfo != null)
@@ -533,7 +485,6 @@ namespace MediaInfoKeeper.Options
                 CreateScheduledTaskEntry("刷新媒体元数据", "main.scheduled.refreshRecentMetadata", "main.scheduled.run.refreshRecentMetadata"),
                 CreateScheduledTaskEntry("扫描片头", "main.scheduled.scanRecentIntro", "main.scheduled.run.scanRecentIntro"),
                 CreateScheduledTaskEntry("提取媒体信息", "main.scheduled.extractRecentMediaInfo", "main.scheduled.run.extractRecentMediaInfo"),
-                CreateScheduledTaskEntry("下载弹幕", "main.scheduled.downloadDanmuXml", "main.scheduled.run.downloadDanmuXml"),
                 CreateScheduledTaskEntry("备份媒体信息", "main.scheduled.exportExistingMediaInfo", "main.scheduled.run.exportExistingMediaInfo"),
                 CreateScheduledTaskEntry("恢复媒体信息", "main.scheduled.restoreMediaInfo", "main.scheduled.run.restoreMediaInfo"),
                 CreateScheduledTaskEntry("扫描外挂字幕", "main.scheduled.scanExternalSubtitle", "main.scheduled.run.scanExternalSubtitle")

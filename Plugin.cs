@@ -337,7 +337,6 @@ namespace MediaInfoKeeper
             options.MainPage.ExportExistingMediaInfoLibraries = NormalizeScopedLibraries(options.MainPage.ExportExistingMediaInfoLibraries);
             options.MainPage.RestoreMediaInfoLibraries = NormalizeScopedLibraries(options.MainPage.RestoreMediaInfoLibraries);
             options.MainPage.ScanExternalSubtitleLibraries = NormalizeScopedLibraries(options.MainPage.ScanExternalSubtitleLibraries);
-            options.MainPage.DownloadDanmuXmlLibraries = NormalizeScopedLibraries(options.MainPage.DownloadDanmuXmlLibraries);
             if (options.IntroSkip != null)
             {
                 options.IntroSkip.LibraryScope = NormalizeScopedLibraries(options.IntroSkip.LibraryScope);
@@ -507,8 +506,6 @@ namespace MediaInfoKeeper
                 new OptionLogEntry("Main.ExportExistingMediaInfoLibraries", "Main", "备份媒体信息范围", FormatOptionValue(options.MainPage.ExportExistingMediaInfoLibraries)),
                 new OptionLogEntry("Main.RestoreMediaInfoLibraries", "Main", "恢复媒体信息范围", FormatOptionValue(options.MainPage.RestoreMediaInfoLibraries)),
                 new OptionLogEntry("Main.ScanExternalSubtitleLibraries", "Main", "扫描外挂字幕范围", FormatOptionValue(options.MainPage.ScanExternalSubtitleLibraries)),
-                new OptionLogEntry("Main.DownloadDanmuXmlLibraries", "Main", "下载弹幕范围", FormatOptionValue(options.MainPage.DownloadDanmuXmlLibraries)),
-                new OptionLogEntry("Main.DownloadDanmuXmlDays", "Main", "下载弹幕时间窗口", FormatTaskIntDisplayValue(options.MainPage.DownloadDanmuXmlDays, true)),
                 new OptionLogEntry(
                     "Main.FileChangeRefreshDelaySeconds",
                     "Main",
