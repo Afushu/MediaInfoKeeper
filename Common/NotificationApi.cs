@@ -10,12 +10,14 @@ using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Notifications;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Session;
 
 namespace MediaInfoKeeper.Common
 {
     public sealed class NotificationApi
     {
+        private const long DefaultDisplayMessageTimeoutMs = 800;
         private readonly INotificationManager notificationManager;
         private readonly IUserManager userManager;
         private readonly ISessionManager sessionManager;
@@ -174,6 +176,42 @@ namespace MediaInfoKeeper.Common
             };
 
             this.notificationManager.SendNotification(request);
+        }
+
+        public async Task DisplayMessage(UserDto user, string text)
+        {
+            if (user == null || string.IsNullOrWhiteSpace(user.Id) || string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            long userInternalId;
+            try
+            {
+                userInternalId = this.userManager.GetInternalId(user.Id);
+            }
+            catch
+            {
+                return;
+            }
+
+            var sessions = this.sessionManager.Sessions
+                .Where(session => session?.UserInternalId == userInternalId && CanDisplayMessage(session))
+                .ToArray();
+
+            foreach (var session in sessions)
+            {
+                var message = new MessageCommand
+                {
+                    Header = Plugin.PluginName,
+                    Text = text,
+                    TimeoutMs = DefaultDisplayMessageTimeoutMs
+                };
+
+                await this.sessionManager
+                    .SendMessageCommand(session.Id, session.Id, message, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
         }
 
         private bool CanDisplayMessage(SessionInfo session)

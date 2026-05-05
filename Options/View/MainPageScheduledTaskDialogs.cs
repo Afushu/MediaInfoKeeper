@@ -1,0 +1,152 @@
+namespace MediaInfoKeeper.Options.View
+{
+    using System.Threading.Tasks;
+    using MediaInfoKeeper.Options;
+
+    internal sealed class RefreshRecentMetadataTaskDialogView : MainPageTaskDialogView<MainPageOptions.RefreshRecentMetadataTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public RefreshRecentMetadataTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.RefreshRecentMetadata ?? new MainPageOptions.RefreshRecentMetadataTaskEditorOptions(), "刷新媒体元数据")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.RefreshRecentMetadata = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class ScanRecentIntroTaskDialogView : MainPageTaskDialogView<MainPageOptions.ScanRecentIntroTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public ScanRecentIntroTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.ScanRecentIntro ?? new MainPageOptions.ScanRecentIntroTaskEditorOptions(), "扫描片头")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.ScanRecentIntro = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class ExtractRecentMediaInfoTaskDialogView : MainPageTaskDialogView<MainPageOptions.ExtractRecentMediaInfoTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public ExtractRecentMediaInfoTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.ExtractRecentMediaInfo ?? new MainPageOptions.ExtractRecentMediaInfoTaskEditorOptions(), "提取媒体信息")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.ExtractRecentMediaInfo = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class DownloadDanmuXmlTaskDialogView : MainPageTaskDialogView<MainPageOptions.DownloadDanmuXmlTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public DownloadDanmuXmlTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.DownloadDanmuXml ?? new MainPageOptions.DownloadDanmuXmlTaskEditorOptions(), "下载弹幕")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.DownloadDanmuXml = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class ExportExistingMediaInfoTaskDialogView : MainPageTaskDialogView<MainPageOptions.ExportExistingMediaInfoTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public ExportExistingMediaInfoTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.ExportExistingMediaInfo ?? new MainPageOptions.ExportExistingMediaInfoTaskEditorOptions(), "备份媒体信息")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.ExportExistingMediaInfo = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class RestoreMediaInfoTaskDialogView : MainPageTaskDialogView<MainPageOptions.RestoreMediaInfoTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public RestoreMediaInfoTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.RestoreMediaInfo ?? new MainPageOptions.RestoreMediaInfoTaskEditorOptions(), "恢复媒体信息")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.RestoreMediaInfo = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+
+    internal sealed class ScanExternalSubtitleTaskDialogView : MainPageTaskDialogView<MainPageOptions.ScanExternalSubtitleTaskEditorOptions>
+    {
+        private readonly MainPageOptions owner;
+
+        public ScanExternalSubtitleTaskDialogView(string pluginId, MainPageOptions owner)
+            : base(pluginId, owner?.ScheduledTasksEditor?.ScanExternalSubtitle ?? new MainPageOptions.ScanExternalSubtitleTaskEditorOptions(), "扫描外挂字幕")
+        {
+            this.owner = owner;
+        }
+
+        public override async Task OnOkCommand(string providerId, string commandId, string data)
+        {
+            await base.OnOkCommand(providerId, commandId, data).ConfigureAwait(false);
+            if (this.owner?.ScheduledTasksEditor != null)
+            {
+                this.owner.ScheduledTasksEditor.ScanExternalSubtitle = this.Options;
+            }
+            this.owner?.SyncFieldsFromScheduledTaskEditor();
+        }
+    }
+}

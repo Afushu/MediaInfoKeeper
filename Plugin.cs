@@ -5,7 +5,6 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Threading;
 using MediaInfoKeeper.Common;
 using MediaInfoKeeper.Options;
@@ -241,8 +240,8 @@ namespace MediaInfoKeeper
             get
             {
                 var options = this.OptionsStore.GetOptions();
-                EnsureMainPageTaskOptionValues(options);
                 options.MainPage ??= new MainPageOptions();
+                options.MainPage.SyncScheduledTaskEditorFromFields();
                 options.GetMediaInfoOptions();
                 return options;
             }
@@ -266,7 +265,7 @@ namespace MediaInfoKeeper
                 {
                     this.pages = new List<IPluginUIPageController>
                     {
-                        new MainPageController(this.GetPluginInfo(), this.MainPageOptionsStore,
+                        new MainPageController(this.applicationHost, this.GetPluginInfo(), this.MainPageOptionsStore,
                             this.MediaInfoOptionsStore,
                             this.GitHubOptionsStore, this.IntroSkipOptionsStore, this.NetWorkOptionsStore,
                             this.EnhanceOptionsStore, this.MetaDataOptionsStore
@@ -288,7 +287,6 @@ namespace MediaInfoKeeper
                 return;
             }
 
-            EnsureMainPageTaskOptionValues(options);
             options.MainPage ??= new MainPageOptions();
             options.GetMediaInfoOptions();
             options.IntroSkip ??= new IntroSkipOptions();
@@ -311,6 +309,7 @@ namespace MediaInfoKeeper
 
             var list = LibraryService.BuildLibrarySelectOptions();
             options.MainPage.LibraryList = list;
+            options.MainPage.SyncScheduledTaskEditorFromFields();
             options.IntroSkip.LibraryList = list;
             options.GitHub.CurrentVersion = GetCurrentVersion();
             options.GitHub.LatestReleaseVersion = GetLatestReleaseVersion();
@@ -329,6 +328,7 @@ namespace MediaInfoKeeper
                 ? null
                 : CreateOptionSnapshot(BuildPersistedOptionLogEntries(persistedOptions));
 
+            options.MainPage.SyncFieldsFromScheduledTaskEditor();
             options.MainPage.CatchupLibraries = NormalizeScopedLibraries(options.MainPage.CatchupLibraries);
             options.MainPage.ScheduledTaskLibraries = NormalizeScopedLibraries(options.MainPage.ScheduledTaskLibraries);
             options.MainPage.RefreshRecentMetadataLibraries = NormalizeScopedLibraries(options.MainPage.RefreshRecentMetadataLibraries);
@@ -660,74 +660,6 @@ namespace MediaInfoKeeper
             return string.IsNullOrEmpty(value) ? "空" : "***";
         }
 
-        private void EnsureMainPageTaskOptionValues(PluginConfiguration options)
-        {
-            if (options == null)
-            {
-                return;
-            }
-
-            options.MainPage ??= new MainPageOptions();
-            var root = LoadPersistedOptionsRoot();
-            var mainPageNode = root?["MainPage"] as JsonObject;
-
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.RefreshRecentMetadataLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.RefreshRecentMetadataLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ScanRecentIntroLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ScanRecentIntroLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ExtractRecentMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ExtractRecentMediaInfoLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ExportExistingMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ExportExistingMediaInfoLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.RestoreMediaInfoLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.RestoreMediaInfoLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.ScanExternalSubtitleLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.ScanExternalSubtitleLibraries = value);
-            BackfillTaskScopeIfMissing(mainPageNode, nameof(MainPageOptions.DownloadDanmuXmlLibraries), options.MainPage.ScheduledTaskLibraries, value => options.MainPage.DownloadDanmuXmlLibraries = value);
-
-            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.RefreshRecentMetadataDays), options.MainPage.RecentItemsDays, value => options.MainPage.RefreshRecentMetadataDays = value);
-            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.ScanRecentIntroLimit), options.MainPage.RecentItemsLimit, value => options.MainPage.ScanRecentIntroLimit = value);
-            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.ExtractRecentMediaInfoLimit), options.MainPage.RecentItemsLimit, value => options.MainPage.ExtractRecentMediaInfoLimit = value);
-            BackfillTaskIntIfMissing(mainPageNode, nameof(MainPageOptions.DownloadDanmuXmlDays), options.MainPage.RecentItemsDays, value => options.MainPage.DownloadDanmuXmlDays = value);
-        }
-
-        private JsonObject LoadPersistedOptionsRoot()
-        {
-            try
-            {
-                if (!File.Exists(this.OptionsStore.OptionsFilePath))
-                {
-                    return null;
-                }
-
-                var json = File.ReadAllText(this.OptionsStore.OptionsFilePath);
-                return JsonNode.Parse(json) as JsonObject;
-            }
-            catch (Exception ex)
-            {
-                this.logger.Warn("读取配置 JSON 失败，回退到当前对象值：{0}", ex.Message);
-                return null;
-            }
-        }
-
-        private static void BackfillTaskScopeIfMissing(JsonObject mainPageNode, string propertyName, string fallbackValue, Action<string> setter)
-        {
-            if (HasJsonProperty(mainPageNode, propertyName))
-            {
-                return;
-            }
-
-            setter(fallbackValue ?? string.Empty);
-        }
-
-        private static void BackfillTaskIntIfMissing(JsonObject mainPageNode, string propertyName, int fallbackValue, Action<int> setter)
-        {
-            if (HasJsonProperty(mainPageNode, propertyName))
-            {
-                return;
-            }
-
-            setter(fallbackValue);
-        }
-
-        private static bool HasJsonProperty(JsonObject jsonObject, string propertyName)
-        {
-            return jsonObject != null && jsonObject.ContainsKey(propertyName);
-        }
         private string NormalizeScopedLibraries(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw))

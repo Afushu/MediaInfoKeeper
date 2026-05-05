@@ -2,6 +2,7 @@ namespace MediaInfoKeeper.Options.View
 {
     using System.Collections.Generic;
     using System.Threading.Tasks;
+    using MediaBrowser.Common;
     using MediaBrowser.Model.Plugins;
     using MediaBrowser.Model.Plugins.UI;
     using MediaBrowser.Model.Plugins.UI.Views;
@@ -11,10 +12,12 @@ namespace MediaInfoKeeper.Options.View
     internal class MainPageController : ControllerBase, IHasTabbedUIPages
     {
         private readonly PluginInfo pluginInfo;
+        private readonly IApplicationHost applicationHost;
         private readonly MainPageOptionsStore mainPageOptionsStore;
         private readonly List<IPluginUIPageController> tabPages = new List<IPluginUIPageController>();
 
-        public MainPageController(PluginInfo pluginInfo,
+        public MainPageController(IApplicationHost applicationHost,
+            PluginInfo pluginInfo,
             MainPageOptionsStore mainPageOptionsStore,
             MediaInfoOptionsStore mediaInfoOptionsStore,
             GitHubOptionsStore gitHubOptionsStore,
@@ -28,6 +31,7 @@ namespace MediaInfoKeeper.Options.View
             )
             : base(pluginInfo.Id)
         {
+            this.applicationHost = applicationHost;
             this.pluginInfo = pluginInfo;
             this.mainPageOptionsStore = mainPageOptionsStore;
 
@@ -68,7 +72,7 @@ namespace MediaInfoKeeper.Options.View
 
         public override Task<IPluginUIView> CreateDefaultPageView()
         {
-            IPluginUIView view = new MainPageView(this.pluginInfo, this.mainPageOptionsStore);
+            IPluginUIView view = new MainPageView(this.applicationHost, this.pluginInfo, this.mainPageOptionsStore);
             return Task.FromResult(view);
         }
 
