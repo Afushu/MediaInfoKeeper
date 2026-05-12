@@ -99,6 +99,13 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
             : (['zh-hk', 'zh-tw'].includes(locale) ? '掃描片頭' : 'Scan Intro');
     }
 
+    function getScanExternalSubtitleCommandName() {
+        const locale = (globalize.getCurrentLocale() || '').toLowerCase();
+        return locale === 'zh-cn'
+            ? '扫描外挂字幕'
+            : (['zh-hk', 'zh-tw'].includes(locale) ? '掃描外掛字幕' : 'Scan External Subtitles');
+    }
+
     function getDownloadDanmuCommandName() {
         const locale = (globalize.getCurrentLocale() || '').toLowerCase();
         return locale === 'zh-cn'
@@ -131,34 +138,35 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
         const normalized = normalizeResult(result);
         const isDelete = action === 'delete';
         const isScanIntro = action === 'scan_intro';
+        const isScanExternalSubtitle = action === 'scan_external_subtitle';
         const isDownloadDanmu = action === 'download_danmu';
         const isSetIntro = action === 'set_intro';
         const isClearIntro = action === 'clear_intro';
         if (!result) {
-            return (isDelete ? getDeleteCommandName() : (isScanIntro ? getScanIntroCommandName() : (isDownloadDanmu ? getDownloadDanmuCommandName() : (isSetIntro ? getSetIntroCommandName() : (isClearIntro ? getClearIntroCommandName() : getCommandName()))))) + ' finished';
+            return (isDelete ? getDeleteCommandName() : (isScanIntro ? getScanIntroCommandName() : (isScanExternalSubtitle ? getScanExternalSubtitleCommandName() : (isDownloadDanmu ? getDownloadDanmuCommandName() : (isSetIntro ? getSetIntroCommandName() : (isClearIntro ? getClearIntroCommandName() : getCommandName())))))) + ' finished';
         }
 
         const locale = (globalize.getCurrentLocale() || '').toLowerCase();
         if (!normalized.hasStats) {
             if (locale === 'zh-cn') {
-                return (isDelete ? '删除完成' : (isScanIntro ? '扫描完成' : (isSetIntro ? '设置完成' : (isClearIntro ? '清除完成' : '提取完成')))) + '（返回体无统计字段，请看日志）';
+                return (isDelete ? '删除完成' : (isScanIntro ? '扫描完成' : (isScanExternalSubtitle ? '扫描完成' : (isSetIntro ? '设置完成' : (isClearIntro ? '清除完成' : '提取完成'))))) + '（返回体无统计字段，请看日志）';
             }
             if (isDownloadDanmu) {
                 return '下载完成（返回体无统计字段，请看日志）';
             }
             if (['zh-hk', 'zh-tw'].includes(locale)) {
-                return (isDelete ? '刪除完成' : (isScanIntro ? '掃描完成' : (isDownloadDanmu ? '下載完成' : (isSetIntro ? '設置完成' : (isClearIntro ? '清除完成' : '提取完成'))))) + '（返回體無統計字段，請看日誌）';
+                return (isDelete ? '刪除完成' : (isScanIntro ? '掃描完成' : (isScanExternalSubtitle ? '掃描完成' : (isDownloadDanmu ? '下載完成' : (isSetIntro ? '設置完成' : (isClearIntro ? '清除完成' : '提取完成')))))) + '（返回體無統計字段，請看日誌）';
             }
             return 'Completed (no stats in response, check server logs)';
         }
 
         if (locale === 'zh-cn') {
-            const prefix = isDelete ? '删除完成' : (isScanIntro ? '扫描完成' : (isDownloadDanmu ? '下载完成' : (isSetIntro ? '设置完成' : (isClearIntro ? '清除完成' : '提取完成'))));
+            const prefix = isDelete ? '删除完成' : (isScanIntro ? '扫描完成' : (isScanExternalSubtitle ? '扫描完成' : (isDownloadDanmu ? '下载完成' : (isSetIntro ? '设置完成' : (isClearIntro ? '清除完成' : '提取完成')))));
             return prefix + `：成功 ${normalized.succeeded}，失败 ${normalized.failed}，跳过 ${normalized.skipped}`;
         }
 
         if (['zh-hk', 'zh-tw'].includes(locale)) {
-            const prefix = isDelete ? '刪除完成' : (isScanIntro ? '掃描完成' : (isDownloadDanmu ? '下載完成' : (isSetIntro ? '設置完成' : (isClearIntro ? '清除完成' : '提取完成'))));
+            const prefix = isDelete ? '刪除完成' : (isScanIntro ? '掃描完成' : (isScanExternalSubtitle ? '掃描完成' : (isDownloadDanmu ? '下載完成' : (isSetIntro ? '設置完成' : (isClearIntro ? '清除完成' : '提取完成')))));
             return prefix + `：成功 ${normalized.succeeded}，失敗 ${normalized.failed}，跳過 ${normalized.skipped}`;
         }
 
@@ -586,6 +594,30 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
             });
         },
 
+        scanExternalSubtitle: function (ids) {
+            if (!ids || !ids.length) {
+                return Promise.resolve();
+            }
+
+            const commandName = getScanExternalSubtitleCommandName();
+            return confirm({
+                text: globalize.translate('AreYouSureToContinue'),
+                title: commandName,
+                confirmText: commandName,
+                primary: 'cancel'
+            }).then(function () {
+                loading.show();
+                const apiClient = connectionManager.currentApiClient();
+                return postJson(apiClient, 'MediaInfoKeeper/Items/ScanExternalSubtitle', { Ids: ids }).then(function (result) {
+                    toast(getResultMessage(result, 'scan_external_subtitle'));
+                }).catch(function (err) {
+                    toast(getErrorMessage('scan_external_subtitle', err));
+                }).finally(function () {
+                    loading.hide();
+                });
+            });
+        },
+
         downloadDanmu: function (ids) {
             if (!ids || !ids.length) {
                 return Promise.resolve();
@@ -863,6 +895,11 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
                     commands.push({ name: getClearIntroCommandName(), id: 'clear_intro', icon: 'delete_forever' });
                 }
 
+                const externalSubtitleSupportedTypes = { Movie: true, Episode: true, Season: true, Series: true, Video: true };
+                if (items.every(item => externalSubtitleSupportedTypes[item.Type])) {
+                    commands.push({ name: getScanExternalSubtitleCommandName(), id: 'scan_external_subtitle', icon: 'subtitles' });
+                }
+
                 return commands;
             },
             executeCommand: function (command, items) {
@@ -889,6 +926,10 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
 
                 if (command === 'scan_intro') {
                     return api.scanIntro(ids);
+                }
+
+                if (command === 'scan_external_subtitle') {
+                    return api.scanExternalSubtitle(ids);
                 }
 
                 if (command === 'download_danmu') {

@@ -31,6 +31,7 @@ namespace MediaInfoKeeper.Web
         private readonly ExtractMediaInfoRouteHandler _extractHandler;
         private readonly DeleteMediaInfoPersistRouteHandler _deletePersistHandler;
         private readonly ScanIntroRouteHandler _scanIntroHandler;
+        private readonly ScanExternalSubtitleRouteHandler _scanExternalSubtitleHandler;
         private readonly DownloadDanmuRouteHandler _downloadDanmuHandler;
         private readonly SetIntroRouteHandler _setIntroHandler;
         private readonly ClearIntroRouteHandler _clearIntroHandler;
@@ -48,6 +49,7 @@ namespace MediaInfoKeeper.Web
             _extractHandler = new ExtractMediaInfoRouteHandler(ExpandToTargetItems);
             _deletePersistHandler = new DeleteMediaInfoPersistRouteHandler(ExpandToTargetItems, libraryManager, itemRepository);
             _scanIntroHandler = new ScanIntroRouteHandler(ExpandToTargetItems);
+            _scanExternalSubtitleHandler = new ScanExternalSubtitleRouteHandler(ExpandToTargetItems);
             _downloadDanmuHandler = new DownloadDanmuRouteHandler(ExpandToTargetItems);
             _setIntroHandler = new SetIntroRouteHandler(ExpandToTargetItems, libraryManager, itemRepository);
             _clearIntroHandler = new ClearIntroRouteHandler(ExpandToTargetItems, libraryManager, itemRepository);
@@ -183,6 +185,11 @@ namespace MediaInfoKeeper.Web
         public MediaInfoMenuResponse Post(ScanIntroRequest request)
         {
             return _scanIntroHandler.Handle(request);
+        }
+
+        public MediaInfoMenuResponse Post(ScanExternalSubtitleRequest request)
+        {
+            return _scanExternalSubtitleHandler.Handle(request);
         }
 
         public MediaInfoMenuResponse Post(DownloadDanmuRequest request)
