@@ -3,11 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
-using System.Threading.Tasks;
 using Emby.Web.GenericEdit.Elements;
 using MediaInfoKeeper.Common;
 using MediaInfoKeeper.Options;
@@ -44,7 +41,7 @@ namespace MediaInfoKeeper
     /// <summary>
     /// The plugin.
     /// </summary>
-    public class Plugin : BasePlugin, IHasThumbImage, IHasUIPages
+    public class Plugin : BasePlugin, IHasThumbImage, IHasUIPages, IDisposable
     {
         public const string PluginName = "MediaInfoKeeper";
         public const string TaskCategoryName = "Auto-MediaInfoKeeper";
@@ -64,6 +61,7 @@ namespace MediaInfoKeeper
         public static StrmFileWatcher StrmFileWatcher { get; private set; }
         public static ExternalFiles ExternalFiles { get; private set; }
         public static DanmuService DanmuService { get; private set; }
+        internal static ReleaseInfoService ReleaseInfoService { get; private set; }
 
         private readonly Guid id = new Guid("874D7056-072D-43A4-16DD-BC32665B9563");
         private readonly ILogger logger;
@@ -79,8 +77,8 @@ namespace MediaInfoKeeper
         private readonly ISessionManager sessionManager;
         private readonly IMediaMountManager mediaMountManager;
         private readonly IApplicationHost applicationHost;
-        private readonly IHttpClient httpClient;
         private readonly DirectoryService directoryService;
+        private readonly ReleaseInfoService releaseInfoService;
 
         internal static IProviderManager ProviderManager { get; private set; }
         internal static IFileSystem FileSystem { get; private set; }
@@ -103,15 +101,6 @@ namespace MediaInfoKeeper
 #if DEBUG
         internal readonly DebugOptionsStore DebugOptionsStore;
 #endif
-        private static string latestReleaseVersionCache;
-        private static string releaseHistoryChannelCache;
-        private static readonly object ReleaseHistoryLock = new object();
-        private static DateTimeOffset releaseHistoryCheckedAt = DateTimeOffset.MinValue;
-        private static string releaseHistoryBodyCache;
-        private static bool releaseHistoryRefreshInProgress;
-        private static readonly TimeSpan LatestVersionCacheDuration = TimeSpan.FromMinutes(30);
-        private const string GitHubReleaseHistoryUrl = "https://api.github.com/repos/honue/MediaInfoKeeper/releases?per_page=100&page=";
-
         /// <summary>初始化插件并注册库事件处理。</summary>
         public Plugin(
             IApplicationHost applicationHost,
@@ -149,7 +138,8 @@ namespace MediaInfoKeeper
             this.userDataManager = userDataManager;
             this.sessionManager = sessionManager;
             this.mediaMountManager = mediaMountManager;
-            this.httpClient = httpClient;
+            this.releaseInfoService = new ReleaseInfoService(httpClient, this.logger, () => this.Options);
+            ReleaseInfoService = this.releaseInfoService;
             ProviderManager = providerManager;
             FileSystem = fileSystem;
             LibraryManager = libraryManager;
@@ -201,6 +191,7 @@ namespace MediaInfoKeeper
             StrmFileWatcher = new StrmFileWatcher(libraryMonitor, LibraryService, this.logger);
             PluginWebResourceLoader.Initialize(serverConfigurationManager);
             PrefetchService.Initialize();
+            this.releaseInfoService.Start();
 
             if (this.Options.IntroSkip?.EnableIntroMarker == true || this.Options.IntroSkip?.EnableCreditsMarker == true)
             {
@@ -300,9 +291,9 @@ namespace MediaInfoKeeper
             options.MainPage.LibraryList = list;
             options.IntroSkip.LibraryList = list;
             options.MainPage.UpdatePluginVersionStatus = BuildVersionStatusItem();
-            options.MainPage.UpdatePluginReleaseHistoryBody = string.IsNullOrWhiteSpace(releaseHistoryBodyCache)
+            options.MainPage.UpdatePluginReleaseHistoryBody = string.IsNullOrWhiteSpace(this.releaseInfoService.HistoryBody)
                 ? "加载中"
-                : releaseHistoryBodyCache;
+                : this.releaseInfoService.HistoryBody;
             options.MainPage.PrepareScheduledTaskEditorForUi();
         }
 
@@ -842,7 +833,7 @@ namespace MediaInfoKeeper
         private StatusItem BuildVersionStatusItem()
         {
             var currentVersion = GetCurrentVersion();
-            var latestVersion = latestReleaseVersionCache;
+            var latestVersion = this.releaseInfoService.LatestVersion;
 
             var normalizedCurrent = NormalizeVersionLabel(currentVersion);
             var normalizedLatest = NormalizeVersionLabel(latestVersion);
@@ -893,297 +884,20 @@ namespace MediaInfoKeeper
             return string.IsNullOrWhiteSpace(releaseTagAttribute?.Value) ? null : releaseTagAttribute.Value.Trim();
         }
 
-        internal void RefreshReleaseInfoInBackground()
+        public void Dispose()
         {
-            var shouldStart = false;
-            lock (ReleaseHistoryLock)
+            this.libraryManager.ItemAdded -= this.OnItemAdded;
+            this.libraryManager.ItemRemoved -= this.OnItemRemoved;
+            this.userDataManager.UserDataSaved -= this.OnUserDataSaved;
+            this.releaseInfoService.Dispose();
+            PrefetchService?.Dispose();
+            StrmFileWatcher?.Dispose();
+            IntroSkipPlaySessionMonitor?.Dispose();
+            if (ReferenceEquals(ReleaseInfoService, this.releaseInfoService))
             {
-                if (!releaseHistoryRefreshInProgress)
-                {
-                    releaseHistoryRefreshInProgress = true;
-                    shouldStart = true;
-                }
-            }
-
-            if (!shouldStart)
-            {
-                return;
-            }
-
-            Task.Run(() =>
-            {
-                try
-                {
-                    RefreshReleaseHistoryCache(forceRefresh: false);
-                }
-                catch (Exception ex)
-                {
-                    this.logger.Info($"后台获取 GitHub 历史版本失败: {ex.Message}");
-                    this.logger.Debug(ex.StackTrace);
-                }
-                finally
-                {
-                    lock (ReleaseHistoryLock)
-                    {
-                        releaseHistoryRefreshInProgress = false;
-                    }
-                }
-            });
-        }
-
-        private void RefreshReleaseHistoryCache(bool forceRefresh)
-        {
-            var now = ConfiguredDateTime.NowOffset;
-            var currentChannel = GetSelectedUpdateChannel();
-            if (!forceRefresh &&
-                now - releaseHistoryCheckedAt < LatestVersionCacheDuration &&
-                string.Equals(releaseHistoryChannelCache, currentChannel, StringComparison.Ordinal) &&
-                !string.IsNullOrWhiteSpace(releaseHistoryBodyCache))
-            {
-                return;
-            }
-
-            lock (ReleaseHistoryLock)
-            {
-                if (!forceRefresh &&
-                    now - releaseHistoryCheckedAt < LatestVersionCacheDuration &&
-                    string.Equals(releaseHistoryChannelCache, currentChannel, StringComparison.Ordinal) &&
-                    !string.IsNullOrWhiteSpace(releaseHistoryBodyCache))
-                {
-                    return;
-                }
-
-                var historyInfo = FetchReleaseHistoryInfo(currentChannel);
-                if (historyInfo.IsSuccess)
-                {
-                    releaseHistoryCheckedAt = now;
-                    releaseHistoryChannelCache = currentChannel;
-                    releaseHistoryBodyCache = historyInfo.HistoryBody;
-                    latestReleaseVersionCache = historyInfo.LatestVersion;
-                    return;
-                }
-
-                releaseHistoryCheckedAt = DateTimeOffset.MinValue;
-                releaseHistoryChannelCache = null;
-                releaseHistoryBodyCache = historyInfo.HistoryBody;
-                latestReleaseVersionCache = historyInfo.LatestVersion;
+                ReleaseInfoService = null;
             }
         }
 
-        private ReleaseHistoryInfo FetchReleaseHistoryInfo(string updateChannel)
-        {
-            try
-            {
-                var latestVersion = "未知";
-                var preferBeta = string.Equals(
-                    updateChannel,
-                    MainPageOptions.UpdateChannelOption.Beta.ToString(),
-                    StringComparison.OrdinalIgnoreCase);
-                var requestOptions = new HttpRequestOptions
-                {
-                    Url = $"{GitHubReleaseHistoryUrl}1",
-                    AcceptHeader = "application/vnd.github+json",
-                    UserAgent = "MediaInfoKeeper",
-                    EnableDefaultUserAgent = false,
-                    LogRequest = true,
-                    LogResponse = true,
-                    TimeoutMs = 3000
-                };
-                var token = this.Options?.GetEffectiveUpdatePluginOptions()?.GitHubToken;
-                if (!string.IsNullOrWhiteSpace(token))
-                {
-                    requestOptions.RequestHeaders["Authorization"] = $"token {token}";
-                }
-
-                using var response = this.httpClient.SendAsync(requestOptions, "GET").GetAwaiter().GetResult();
-                using var responseReader = new StreamReader(response.Content);
-                var responseBody = responseReader.ReadToEnd();
-                if ((int)response.StatusCode < 200 || (int)response.StatusCode >= 300)
-                {
-                    this.logger.Info($"获取 GitHub 历史版本失败: {(int)response.StatusCode} {response.StatusCode}");
-                    this.logger.Info($"GitHub 响应体: {responseBody}");
-                    return new ReleaseHistoryInfo("获取失败", "获取失败", false);
-                }
-
-                using var document = JsonDocument.Parse(responseBody);
-                if (document.RootElement.ValueKind == JsonValueKind.Array)
-                {
-                    var releases = new List<ReleaseHistoryEntry>();
-                    foreach (var release in document.RootElement.EnumerateArray())
-                    {
-                        var isDraft = release.TryGetProperty("draft", out var draftElement) &&
-                                      draftElement.ValueKind == JsonValueKind.True;
-                        if (isDraft)
-                        {
-                            continue;
-                        }
-
-                        var isPrerelease = release.TryGetProperty("prerelease", out var prereleaseElement) &&
-                                           prereleaseElement.ValueKind == JsonValueKind.True;
-
-                        var tag = release.TryGetProperty("tag_name", out var tagElement)
-                            ? tagElement.GetString()
-                            : string.Empty;
-                        var name = release.TryGetProperty("name", out var nameElement)
-                            ? nameElement.GetString()
-                            : string.Empty;
-                        var body = release.TryGetProperty("body", out var bodyElement)
-                            ? bodyElement.GetString()
-                            : string.Empty;
-                        var publishedAt = release.TryGetProperty("published_at", out var publishedElement)
-                            ? publishedElement.GetString()
-                            : string.Empty;
-                        var createdAt = release.TryGetProperty("created_at", out var createdElement)
-                            ? createdElement.GetString()
-                            : string.Empty;
-                        var publishedAtLocal = publishedAt;
-                        if (!string.IsNullOrWhiteSpace(publishedAt) &&
-                            DateTimeOffset.TryParse(publishedAt, out var publishedOffset))
-                        {
-                            publishedAtLocal = ConfiguredDateTime
-                                .ToConfiguredOffset(publishedOffset)
-                                .ToString("yyyy-MM-dd HH:mm:ss");
-                        }
-
-                        if (string.IsNullOrWhiteSpace(body))
-                        {
-                            body = "无更新说明";
-                        }
-
-                        releases.Add(new ReleaseHistoryEntry(
-                            tag,
-                            name,
-                            body,
-                            publishedAtLocal,
-                            isPrerelease,
-                            GetReleaseSortTime(publishedAt, createdAt)));
-                    }
-
-                    var orderedReleases = releases
-                        .OrderByDescending(r => r.SortTime)
-                        .ThenByDescending(r => r.Tag ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                        .ThenByDescending(r => r.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-
-                    var latestRelease = preferBeta
-                        ? orderedReleases.FirstOrDefault()
-                        : orderedReleases.FirstOrDefault(r => !r.IsPrerelease);
-                    if (latestRelease != null)
-                    {
-                        latestVersion = !string.IsNullOrWhiteSpace(latestRelease.Tag) ? latestRelease.Tag.Trim()
-                            : !string.IsNullOrWhiteSpace(latestRelease.Name) ? latestRelease.Name.Trim()
-                            : "未知";
-                    }
-
-                    var sb = new StringBuilder();
-                    foreach (var release in orderedReleases)
-                    {
-                        sb.Append(string.IsNullOrWhiteSpace(release.Tag) ? "Release" : release.Tag.Trim());
-                        if (!string.IsNullOrWhiteSpace(release.Name))
-                        {
-                            sb.Append(" - ").Append(release.Name.Trim());
-                        }
-                        if (release.IsPrerelease)
-                        {
-                            sb.Append(" [Prerelease]");
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(release.PublishedAtLocal))
-                        {
-                            sb.Append(" (").Append(release.PublishedAtLocal.Trim()).Append(')');
-                        }
-
-                        sb.AppendLine();
-                        sb.AppendLine(release.Body.Trim());
-                        sb.AppendLine("----");
-                    }
-
-                    if (sb.Length == 0)
-                    {
-                        return new ReleaseHistoryInfo("暂无发布记录", latestVersion, true);
-                    }
-
-                    return new ReleaseHistoryInfo(sb.ToString().TrimEnd(), latestVersion, true);
-                }
-                
-                return new ReleaseHistoryInfo("暂无发布记录", latestVersion, true);
-            }
-            catch (Exception ex)
-            {
-                this.logger.Info($"获取 GitHub 历史版本失败: {ex.Message}");
-                this.logger.Debug(ex.StackTrace);
-                return new ReleaseHistoryInfo("获取失败", "获取失败", false);
-            }
-        }
-
-        private string GetSelectedUpdateChannel()
-        {
-            var updateChannel = this.Options?.GetEffectiveUpdatePluginOptions()?.UpdateChannel;
-            return string.IsNullOrWhiteSpace(updateChannel)
-                ? MainPageOptions.UpdateChannelOption.Stable.ToString()
-                : updateChannel;
-        }
-
-        internal static DateTimeOffset GetReleaseSortTime(string publishedAt, string createdAt)
-        {
-            if (DateTimeOffset.TryParse(publishedAt, out var publishedOffset))
-            {
-                return publishedOffset;
-            }
-
-            if (DateTimeOffset.TryParse(createdAt, out var createdOffset))
-            {
-                return createdOffset;
-            }
-
-            return DateTimeOffset.MinValue;
-        }
-
-        private readonly struct ReleaseHistoryInfo
-        {
-            public ReleaseHistoryInfo(string historyBody, string latestVersion, bool isSuccess)
-            {
-                HistoryBody = historyBody;
-                LatestVersion = latestVersion;
-                IsSuccess = isSuccess;
-            }
-
-            public string HistoryBody { get; }
-
-            public string LatestVersion { get; }
-
-            public bool IsSuccess { get; }
-        }
-
-        private sealed class ReleaseHistoryEntry
-        {
-            public ReleaseHistoryEntry(
-                string tag,
-                string name,
-                string body,
-                string publishedAtLocal,
-                bool isPrerelease,
-                DateTimeOffset sortTime)
-            {
-                Tag = tag;
-                Name = name;
-                Body = body;
-                PublishedAtLocal = publishedAtLocal;
-                IsPrerelease = isPrerelease;
-                SortTime = sortTime;
-            }
-
-            public string Tag { get; }
-
-            public string Name { get; }
-
-            public string Body { get; }
-
-            public string PublishedAtLocal { get; }
-
-            public bool IsPrerelease { get; }
-
-            public DateTimeOffset SortTime { get; }
-        }
     }
 }

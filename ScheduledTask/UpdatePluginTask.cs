@@ -6,6 +6,7 @@ using MediaBrowser.Model.Activity;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Serialization;
 using MediaBrowser.Model.Tasks;
+using MediaInfoKeeper.Services;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -28,10 +29,7 @@ namespace MediaInfoKeeper.ScheduledTask
         private readonly IJsonSerializer jsonSerializer;
         private readonly IActivityManager activityManager;
         private readonly IServerApplicationHost serverApplicationHost;
-        private const int ReleasePageSize = 100;
-        private const int MaxReleasePages = 10;
         private static string PluginAssemblyFilename => Assembly.GetExecutingAssembly().GetName().Name + ".dll";
-        private static string RepoReleaseUrlTemplate => $"https://api.github.com/repos/honue/MediaInfoKeeper/releases?per_page={ReleasePageSize}&page={{0}}";
         private static string RepoVersionUrl => "https://raw.githubusercontent.com/honue/MediaInfoKeeper/master/Version.json";
 
         public string Key => "UpdatePluginTask";
@@ -99,7 +97,7 @@ namespace MediaInfoKeeper.ScheduledTask
                     embyVersion,
                     updateChannel);
 
-                var apiResult = await FetchReleaseForChannel(cancellationToken, updateChannel, githubToken).ConfigureAwait(false);
+                var apiResult = await Plugin.ReleaseInfoService.RefreshAndSelectReleaseForChannelAsync(cancellationToken, updateChannel, githubToken).ConfigureAwait(false);
                 if (apiResult == null)
                 {
                     throw new Exception("未找到匹配当前更新频道的 Release");
@@ -141,7 +139,7 @@ namespace MediaInfoKeeper.ScheduledTask
                 }
 
                 logger.Info("版本校验通过：允许检查并更新插件。");
-                var assets = apiResult?.assets ?? new List<ApiAssetInfo>();
+                var assets = apiResult?.assets ?? new List<ReleaseInfoService.ReleaseAssetInfo>();
                 string targetAssetName = null;
 
                 if (Environment.OSVersion.Platform == PlatformID.Win32NT)
@@ -349,76 +347,6 @@ namespace MediaInfoKeeper.ScheduledTask
             return null;
         }
 
-        private async Task<ApiResponseInfo> FetchReleaseForChannel(
-            CancellationToken cancellationToken,
-            string updateChannel,
-            string githubToken)
-        {
-            for (var page = 1; page <= MaxReleasePages; page++)
-            {
-                var releaseRequestOptions = new HttpRequestOptions
-                {
-                    Url = string.Format(RepoReleaseUrlTemplate, page),
-                    CancellationToken = cancellationToken,
-                    AcceptHeader = "application/json",
-                    UserAgent = "MediaInfoKeeper",
-                    EnableDefaultUserAgent = false,
-                    LogRequest = true,
-                    LogResponse = true
-                };
-                if (!string.IsNullOrWhiteSpace(githubToken))
-                {
-                    releaseRequestOptions.RequestHeaders["Authorization"] = $"token {githubToken}";
-                }
-
-                using var response = await httpClient.SendAsync(releaseRequestOptions, "GET").ConfigureAwait(false);
-                string releaseResponseBody;
-                await using (var contentStream = response.Content)
-                using (var reader = new StreamReader(contentStream))
-                {
-                    releaseResponseBody = await reader.ReadToEndAsync().ConfigureAwait(false);
-                }
-
-                if ((int)response.StatusCode < 200 || (int)response.StatusCode >= 300)
-                {
-                    logger.Error("获取 Release 失败：page={0}, status={1}, body={2}", page, (int)response.StatusCode, releaseResponseBody);
-                    throw new Exception($"获取 Release 失败: {(int)response.StatusCode}");
-                }
-
-                var releaseResults = jsonSerializer.DeserializeFromString<List<ApiResponseInfo>>(releaseResponseBody) ??
-                                     new List<ApiResponseInfo>();
-                var selected = SelectReleaseForChannel(releaseResults, updateChannel);
-                if (selected != null)
-                {
-                    return selected;
-                }
-
-                if (releaseResults.Count < ReleasePageSize)
-                {
-                    break;
-                }
-            }
-
-            return null;
-        }
-
-        private static ApiResponseInfo SelectReleaseForChannel(
-            IEnumerable<ApiResponseInfo> releases,
-            string updateChannel)
-        {
-            var preferBeta = string.Equals(
-                updateChannel,
-                Options.GitHubOptions.UpdateChannelOption.Beta.ToString(),
-                StringComparison.OrdinalIgnoreCase);
-            var candidates = releases?
-                .Where(r => r != null && !r.draft)
-                    .OrderByDescending(r => Plugin.GetReleaseSortTime(r?.published_at, r?.created_at))
-                .ToList() ?? new List<ApiResponseInfo>();
-            return preferBeta
-                ? candidates.FirstOrDefault()
-                : candidates.FirstOrDefault(r => !r.prerelease);
-        }
-
         private static PluginCompatibilityInfo SelectCompatibilityInfo(
             PluginManifestInfo manifest,
             string updateChannel,
@@ -570,26 +498,5 @@ namespace MediaInfoKeeper.ScheduledTask
             public string max_version { get; set; }
         }
 
-        internal class ApiAssetInfo
-        {
-            public string name { get; set; }
-
-            public string browser_download_url { get; set; }
-        }
-
-        internal class ApiResponseInfo
-        {
-            public string tag_name { get; set; }
-
-            public bool prerelease { get; set; }
-
-            public bool draft { get; set; }
-
-            public string published_at { get; set; }
-
-            public string created_at { get; set; }
-
-            public List<ApiAssetInfo> assets { get; set; }
-        }
     }
 }

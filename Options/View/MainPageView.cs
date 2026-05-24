@@ -41,7 +41,6 @@ namespace MediaInfoKeeper.Options.View
             this.pluginInfo = pluginInfo;
             this.store = store;
             this.ContentData = store.GetOptions();
-            Plugin.Instance?.RefreshReleaseInfoInBackground();
         }
 
         public MainPageOptions Options => this.ContentData as MainPageOptions;
