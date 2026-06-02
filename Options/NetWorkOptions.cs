@@ -61,8 +61,14 @@ namespace MediaInfoKeeper.Options
         [Description("请自备 API 密钥，留空使用Emby默认。")]
         public string AlternativeTmdbApiKey { get; set; } = string.Empty;
 
+        [VisibleCondition(nameof(ShowTmdbReplacementStatus), SimpleCondition.IsTrue)]
+        public StatusItem TmdbReplacementStatus { get; set; } = new StatusItem();
+
         [Browsable(false)]
         public bool ShowProxyLatencyStatus { get; set; } = false;
+
+        [Browsable(false)]
+        public bool ShowTmdbReplacementStatus { get; set; } = false;
 
         public override IEditObjectContainer CreateEditContainer()
         {
@@ -128,10 +134,11 @@ namespace MediaInfoKeeper.Options
                 nameof(WriteProxyEnvVars),
                 nameof(EnableGzip));
 
-            AddGroup("TMDB 替换","替换 TMDB 请求域名，自建反代可参考这个项目：https://github.com/honue/tmdb-proxy",
+            AddGroup("TMDB 替换","替换 TMDB 请求域名，支持整个 http 前缀替换，自建反代可参考这个项目：https://github.com/honue/tmdb-proxy",
                 nameof(AlternativeTmdbApiUrl),
                 nameof(AlternativeTmdbImageUrl),
-                nameof(AlternativeTmdbApiKey));
+                nameof(AlternativeTmdbApiKey),
+                nameof(TmdbReplacementStatus));
 
             var remaining = new List<EditorBase>();
             foreach (var item in root.EditorItems)

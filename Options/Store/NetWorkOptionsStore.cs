@@ -14,7 +14,12 @@ namespace MediaInfoKeeper.Options.Store
         public NetWorkOptions GetOptions()
         {
             var options = this.pluginOptionsStore.GetOptionsForUi();
-            return options.GetNetWorkOptions();
+            var networkOptions = options.GetNetWorkOptions();
+            networkOptions.ProxyLatencyStatus = new Emby.Web.GenericEdit.Elements.StatusItem();
+            networkOptions.ShowProxyLatencyStatus = false;
+            networkOptions.TmdbReplacementStatus = new Emby.Web.GenericEdit.Elements.StatusItem();
+            networkOptions.ShowTmdbReplacementStatus = false;
+            return networkOptions;
         }
 
         public void SetOptions(NetWorkOptions options)

@@ -24,9 +24,18 @@ namespace MediaInfoKeeper.Options.View
 
         public override async Task<IPluginUIView> OnSaveCommand(string itemId, string commandId, string data)
         {
-            var result = await ProxyLatencyProbe.RunAsync(this.Options).ConfigureAwait(false);
-            this.Options.ProxyLatencyStatus = new StatusItem(result.Caption, result.StatusText, result.Status);
+            var proxyProbeTask = ProxyLatencyProbe.RunAsync(this.Options);
+            var tmdbProbeTask = TmdbAltProbe.RunAsync(this.Options);
+            await Task.WhenAll(proxyProbeTask, tmdbProbeTask).ConfigureAwait(false);
+
+            var proxyResult = proxyProbeTask.Result;
+            this.Options.ProxyLatencyStatus = new StatusItem(proxyResult.Caption, proxyResult.StatusText, proxyResult.Status);
             this.Options.ShowProxyLatencyStatus = true;
+
+            var tmdbResult = tmdbProbeTask.Result;
+            this.Options.TmdbReplacementStatus = new StatusItem(tmdbResult.Caption, tmdbResult.StatusText, tmdbResult.Status);
+            this.Options.ShowTmdbReplacementStatus = true;
+
             this.store.SetOptions(this.Options);
             return await base.OnSaveCommand(itemId, commandId, data).ConfigureAwait(false);
         }

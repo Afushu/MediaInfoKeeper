@@ -41,7 +41,9 @@ namespace MediaInfoKeeper.Options.UIBaseClasses.Store
             "UpdatePluginReleaseHistoryBody",
             "DebugMediaInfoUrl",
             "ProxyLatencyStatus",
-            "ShowProxyLatencyStatus"
+            "ShowProxyLatencyStatus",
+            "TmdbReplacementStatus",
+            "ShowTmdbReplacementStatus"
         };
 
         private readonly ILogger logger;
