@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
+using MediaInfoKeeper.Services;
 
 namespace MediaInfoKeeper.Web.Handler
 {
@@ -74,8 +75,8 @@ namespace MediaInfoKeeper.Web.Handler
 
         private static async Task<bool> ExtractSingleItemAsync(BaseItem item)
         {
-            return await Plugin.MediaInfoService
-                .ExtractMediaInfoAsync(item, "快捷菜单")
+            return await MediaInfoRunner
+                .ExtractMediaInfoAsync(item.InternalId, "快捷菜单")
                 .ConfigureAwait(false);
         }
     }

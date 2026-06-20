@@ -54,11 +54,5 @@ namespace MediaInfoKeeper.Options
             return updatePlugin;
         }
 
-        public MediaInfoOptions GetMediaInfoOptions()
-        {
-            var options = MediaInfo ?? new MediaInfoOptions();
-            MediaInfo ??= options;
-            return options;
-        }
     }
 }

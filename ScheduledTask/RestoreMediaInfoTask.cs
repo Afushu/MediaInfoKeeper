@@ -4,11 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Model.Logging;
 using MediaBrowser.Model.Tasks;
-using MediaInfoKeeper.Patch;
-using MediaInfoKeeper.Services;
 using MediaInfoKeeper.Store;
 
 namespace MediaInfoKeeper.ScheduledTask
@@ -59,9 +56,7 @@ namespace MediaInfoKeeper.ScheduledTask
                             return;
                         }
 
-                        await RefreshTaskRunner.RunAsync(
-                                () => ProcessItemAsync(item, "Scheduled Task", cancellationToken),
-                                cancellationToken)
+                        await ProcessItemAsync(item, "Scheduled Task", cancellationToken)
                             .ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
@@ -99,60 +94,28 @@ namespace MediaInfoKeeper.ScheduledTask
         {
             var displayName = item.FileName ?? item.Path;
 
-            var persistMediaInfo = (item is Video || item is Audio) && Plugin.Instance.Options.MainPage.PlugginEnabled;
-            if (!persistMediaInfo)
+            if (!Plugin.Instance.Options.MainPage.PlugginEnabled)
             {
-                this.logger.Info($"跳过 未开启持久化或条目非音视频: {displayName}");
+                this.logger.Info($"跳过 未开启持久化: {displayName}");
                 return Task.CompletedTask;
             }
 
-            using (FfProcessGuard.Allow())
+            var restoreResult = Plugin.MediaInfoService
+                .RestorePersistedMediaInfoForExistingSource(item, source);
+            if (restoreResult == MediaInfoDocument.MediaInfoRestoreResult.Restored)
             {
-                var filePath = item.Path;
-                if (string.IsNullOrEmpty(filePath))
-                {
-                    this.logger.Info($"跳过 无路径: {displayName}");
-                    return Task.CompletedTask;
-                }
-
-                var refreshOptions = Plugin.MediaInfoService.GetMediaInfoRefreshOptions();
-                var directoryService = refreshOptions.DirectoryService;
-
-                if (Uri.TryCreate(filePath, UriKind.Absolute, out var uri) && uri.IsAbsoluteUri &&
-                    uri.Scheme == Uri.UriSchemeFile)
-                {
-                    var file = directoryService.GetFile(filePath);
-                    if (file?.Exists != true)
-                    {
-                        this.logger.Info($"跳过 文件不存在: {displayName}");
-                        return Task.CompletedTask;
-                    }
-                }
-
-                var deserializeResult = Plugin.MediaSourceInfoStore.ApplyToItem(item);
-                if (item is Video)
-                {
-                    Plugin.ChaptersStore.ApplyToItem(item);
-                }
-                else if (item is Audio)
-                {
-                    Plugin.EmbeddedInfoStore.ApplyToItem(item);
-                }
-                if (deserializeResult == MediaInfoDocument.MediaInfoRestoreResult.Restored)
-                {
-                    this.logger.Info($"从JSON 恢复成功: {displayName}");
-                    return Task.CompletedTask;
-                }
-
-                if (deserializeResult == MediaInfoDocument.MediaInfoRestoreResult.AlreadyExists)
-                {
-                    this.logger.Info($"跳过 已存在MediaInfo: {displayName}");
-                    return Task.CompletedTask;
-                }
-
-                this.logger.Info($"无Json媒体信息存在，跳过: {displayName}");
+                this.logger.Info($"从JSON 恢复成功: {displayName}");
                 return Task.CompletedTask;
             }
+
+            if (restoreResult == MediaInfoDocument.MediaInfoRestoreResult.AlreadyExists)
+            {
+                this.logger.Info($"跳过 已存在MediaInfo: {displayName}");
+                return Task.CompletedTask;
+            }
+
+            this.logger.Info($"无Json媒体信息存在，跳过: {displayName}");
+            return Task.CompletedTask;
         }
 
     }

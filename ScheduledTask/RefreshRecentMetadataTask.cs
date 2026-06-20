@@ -182,13 +182,8 @@ namespace MediaInfoKeeper.ScheduledTask
             this.logger.Info($"刷新元数据 {item.FileName ?? item.Path} 入库日期 = {created}");
 
             var options = BuildRefreshOptions(replaceMetadata, replaceImages, replaceThumbnails);
-            var collectionFolders = this.libraryManager.GetCollectionFolders(item).Cast<BaseItem>().ToArray();
-            var libraryOptions = this.libraryManager.GetLibraryOptions(item);
-
-            await RefreshTaskRunner.RunAsync(
-                    () => Plugin.ProviderManager
-                        .RefreshSingleItem(item, options, collectionFolders, libraryOptions, cancellationToken),
-                    cancellationToken)
+            await MetaDataRunner
+                .RefreshMetaDataAsync(item.InternalId, options, cancellationToken)
                 .ConfigureAwait(false);
 
             // 刷新完元数据要重新从json恢复媒体信息，
@@ -220,13 +215,8 @@ namespace MediaInfoKeeper.ScheduledTask
 
             var options = BuildRefreshOptions(replaceMetadata: true, replaceImages: false, replaceThumbnails: false);
             options.Recursive = false;
-            var collectionFolders = this.libraryManager.GetCollectionFolders(item).Cast<BaseItem>().ToArray();
-            var libraryOptions = this.libraryManager.GetLibraryOptions(item);
-
-            await RefreshTaskRunner.RunAsync(
-                    () => Plugin.ProviderManager
-                        .RefreshSingleItem(item, options, collectionFolders, libraryOptions, cancellationToken),
-                    cancellationToken)
+            await MetaDataRunner
+                .RefreshMetaDataAsync(item.InternalId, options, cancellationToken)
                 .ConfigureAwait(false);
 
             var afterRoles = BuildPeopleRoleMap(this.libraryManager.GetItemPeople(item));

@@ -7,6 +7,7 @@ using HarmonyLib;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Model.Logging;
+using MediaInfoKeeper.Services;
 
 namespace MediaInfoKeeper.Patch
 {
@@ -207,8 +208,8 @@ namespace MediaInfoKeeper.Patch
                 try
                 {
                     logger?.Info("DetailTriggerMediaInfo - 浏览详情触发媒体信息提取: {0}", item.FileName ?? item.Path ?? item.Name);
-                    await Plugin.MediaInfoService
-                        .ExtractMediaInfoAsync(item, "浏览详情", CancellationToken.None)
+                    await MediaInfoRunner
+                        .ExtractMediaInfoAsync(item.InternalId, "浏览详情", cancellationToken: CancellationToken.None)
                         .ConfigureAwait(false);
                 }
                 catch (Exception ex)

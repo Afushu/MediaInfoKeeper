@@ -179,10 +179,10 @@ namespace MediaInfoKeeper.Patch
                 Name = "DetailTriggerMediaInfo",
                 Initialize = options => DetailTriggerMediaInfo.Initialize(
                     logger,
-                    IsPluginEnabled(options) && options.GetMediaInfoOptions().ExtractMediaInfoOnItemDetail),
+                    IsPluginEnabled(options) && options.MediaInfo.ExtractMediaInfoOnItemDetail),
                 Configure = options => DetailTriggerMediaInfo.Configure(
-                    IsPluginEnabled(options) && options.GetMediaInfoOptions().ExtractMediaInfoOnItemDetail),
-                IsEnabled = options => IsPluginEnabled(options) && options.GetMediaInfoOptions().ExtractMediaInfoOnItemDetail,
+                    IsPluginEnabled(options) && options.MediaInfo.ExtractMediaInfoOnItemDetail),
+                IsEnabled = options => IsPluginEnabled(options) && options.MediaInfo.ExtractMediaInfoOnItemDetail,
                 IsReady = () => DetailTriggerMediaInfo.IsReady
             });
 

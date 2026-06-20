@@ -14,7 +14,8 @@ namespace MediaInfoKeeper.Options.Store
         public MediaInfoOptions GetOptions()
         {
             var options = this.pluginOptionsStore.GetOptionsForUi();
-            var mediaInfoOptions = options.GetMediaInfoOptions();
+            options.MediaInfo ??= new MediaInfoOptions();
+            var mediaInfoOptions = options.MediaInfo;
             mediaInfoOptions.Initialize();
             return mediaInfoOptions;
         }

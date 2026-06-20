@@ -38,6 +38,11 @@ namespace MediaInfoKeeper.Options
         [DisplayName("允许提取 Strm 封面")]
         [Description("为 strm 音视频启用封面/缩略图提取，ImageCapture。")]
         public bool EnableImageCapture { get; set; } = true;
+
+        [DisplayName("刷新最多并发数")]
+        [Description("设置插件刷新元数据任务的最大并发数，默认 3。")]
+        [MinValue(1), MaxValue(20)]
+        public int MaxConcurrentCount { get; set; } = 3;
         
         [DisplayName("屏蔽非备选语言简介")]
         [Description("开启后，TMDB/TVDB 的电影/剧集/季/集简介若不在备选语言范围（如英文）将被置空。")]
@@ -213,6 +218,7 @@ namespace MediaInfoKeeper.Options
 
             AddGroup("MetaData", "Emby 元数据刷新时，插件会监听元数据刷新过程，阻止媒体信息丢失。",
                 nameof(EnableImageCapture),
+                nameof(MaxConcurrentCount),
                 nameof(BlockNonFallbackLanguage));
             
             AddGroup("TMDB", "",

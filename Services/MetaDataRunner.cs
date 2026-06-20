@@ -1,10 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Providers;
 
 namespace MediaInfoKeeper.Services
 {
-    public static class RefreshTaskRunner
+    public static class MetaDataRunner
     {
         private static readonly object GateSync = new object();
         private static int configuredConcurrency;
@@ -12,21 +14,18 @@ namespace MediaInfoKeeper.Services
         private static TaskCompletionSource<bool> availability =
             CreateAvailabilitySource();
 
-        public static Task RunAsync(
-            Func<Task> action,
+        public static async Task RefreshMetaDataAsync(
+            long internalId,
+            MetadataRefreshOptions options,
             CancellationToken cancellationToken = default)
         {
-            return WithConcurrencyLimitAsync(action, cancellationToken);
-        }
-
-        private static async Task WithConcurrencyLimitAsync(
-            Func<Task> action,
-            CancellationToken cancellationToken)
-        {
+            var item = Plugin.LibraryManager?.GetItemById(internalId) as BaseItem;
             await WaitForTurnAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                await action().ConfigureAwait(false);
+                await Plugin.MetaDataService
+                    .RefreshMetaDataAsync(item, options, cancellationToken)
+                    .ConfigureAwait(false);
             }
             finally
             {
@@ -38,7 +37,7 @@ namespace MediaInfoKeeper.Services
         {
             while (true)
             {
-                Task waiter = null;
+                Task waiter;
                 lock (GateSync)
                 {
                     var maxConcurrent = GetMaxConcurrent();
@@ -89,7 +88,7 @@ namespace MediaInfoKeeper.Services
 
         private static int GetMaxConcurrent()
         {
-            return Math.Max(1, Plugin.Instance?.Options?.GetMediaInfoOptions()?.MaxConcurrentCount ?? 1);
+            return Math.Max(1, Plugin.Instance?.Options?.MetaData?.MaxConcurrentCount ?? 3);
         }
 
         private static TaskCompletionSource<bool> CreateAvailabilitySource()

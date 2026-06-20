@@ -36,9 +36,14 @@ namespace MediaInfoKeeper.Options
         public string MediaInfoJsonRootFolder { get; set; } = GetDefaultMediaInfoJsonRootFolder();
 
         [DisplayName("扫描最多并发数")]
-        [Description("设置插件刷新任务的最大并发数，媒体信息提取和元数据刷新共用此限制，默认 3。")]
+        [Description("设置媒体信息提取任务的最大并发数，默认 3。")]
         [MinValue(1), MaxValue(20)]
         public int MaxConcurrentCount { get; set; } = 3;
+
+        [DisplayName("提取失败重试次数")]
+        [Description("媒体信息刷新后仍检测不到音频或视频流时的额外重试次数。0 表示不重试。")]
+        [MinValue(0), MaxValue(10)]
+        public int ExtractMediaInfoRetryCount { get; set; } = 1;
 
         public void Initialize()
         {

@@ -5,8 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaInfoKeeper.Options;
-using MediaInfoKeeper.Patch;
-using MediaInfoKeeper.Store;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
@@ -103,7 +101,7 @@ namespace MediaInfoKeeper.Services
                 return;
             }
 
-            var enableMediaInfoPrefetch = Plugin.Instance?.Options?.GetMediaInfoOptions()?.EnableMediaInfoPrefetch == true;
+            var enableMediaInfoPrefetch = Plugin.Instance?.Options?.MediaInfo?.EnableMediaInfoPrefetch == true;
             var enableDanmuPrefetch = Plugin.Instance?.Options?.MetaData?.EnableDanmuPrefetch == true;
             if (!enableMediaInfoPrefetch && !enableDanmuPrefetch)
             {
@@ -175,7 +173,7 @@ namespace MediaInfoKeeper.Services
                     }
 
                     var prefetchTasks = new List<Task>(2);
-                    if (Plugin.Instance?.Options?.GetMediaInfoOptions()?.EnableMediaInfoPrefetch == true)
+                    if (Plugin.Instance?.Options?.MediaInfo?.EnableMediaInfoPrefetch == true)
                     {
                         prefetchTasks.Add(QueueMediaInfoPrefetchIfNeededAsync(nextEpisode, cancellationToken));
                     }
@@ -205,77 +203,6 @@ namespace MediaInfoKeeper.Services
                     }
                 }
             });
-        }
-
-        private async Task EnsurePlaybackMediaInfoAsync(long itemId, string source, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var workItem = libraryManager.GetItemById(itemId);
-            if (workItem is not Video && workItem is not Audio)
-            {
-                return;
-            }
-
-            var hasMediaInfo = Plugin.MediaInfoService.HasMediaInfo(workItem);
-            if (hasMediaInfo)
-            {
-                return;
-            }
-
-            var displayName = workItem.Path ?? workItem.Name ?? workItem.Id.ToString();
-            var logPrefix = $"{source} 媒体信息提取";
-            var restoreResult = Plugin.MediaSourceInfoStore.ApplyToItem(workItem);
-            if (workItem is Video)
-            {
-                Plugin.ChaptersStore.ApplyToItem(workItem);
-            }
-            else if (workItem is Audio)
-            {
-                Plugin.EmbeddedInfoStore.ApplyToItem(workItem);
-            }
-
-            if (restoreResult == MediaInfoDocument.MediaInfoRestoreResult.Restored ||
-                restoreResult == MediaInfoDocument.MediaInfoRestoreResult.AlreadyExists)
-            {
-                logger.Info($"{logPrefix}: 命中已保存 MediaInfo，跳过提取 {workItem.FileName ?? workItem.Name ?? displayName}");
-                return;
-            }
-
-            logger.Info($"{logPrefix}: 开始 {workItem.FileName ?? workItem.Name ?? displayName}");
-
-            var refreshOptions = Plugin.MediaInfoService.GetMediaInfoRefreshOptions();
-            refreshOptions.ImageRefreshMode = MetadataRefreshMode.ValidationOnly;
-            refreshOptions.ReplaceAllImages = true;
-            refreshOptions.EnableThumbnailImageExtraction = true;
-            var collectionFolders = libraryManager.GetCollectionFolders(workItem).Cast<BaseItem>().ToArray();
-            var libraryOptions = libraryManager.GetLibraryOptions(workItem);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            using (FfProcessGuard.Allow())
-            {
-                workItem.DateLastRefreshed = new DateTimeOffset();
-                await RefreshTaskRunner.RunAsync(
-                        () => Plugin.ProviderManager.RefreshSingleItem(
-                            workItem,
-                            refreshOptions,
-                            collectionFolders,
-                            libraryOptions,
-                            cancellationToken),
-                        cancellationToken)
-                    .ConfigureAwait(false);
-            }
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (!Plugin.MediaInfoService.HasMediaInfo(workItem))
-            {
-                logger.Warn($"{logPrefix}: 提取后仍无 MediaInfo {displayName}");
-                return;
-            }
-            
-            logger.Info($"{logPrefix}: 完成 {workItem.FileName ?? workItem.Name ?? displayName}");
         }
 
         private Task QueueMediaInfoPrefetchIfNeededAsync(BaseItem item, CancellationToken cancellationToken)
@@ -310,7 +237,22 @@ namespace MediaInfoKeeper.Services
             {
                 try
                 {
-                    await EnsurePlaybackMediaInfoAsync(item.InternalId, source, cancellationToken).ConfigureAwait(false);
+                    var result = await Plugin.MediaInfoService
+                        .EnsurePlaybackMediaInfoAsync(
+                            item.InternalId,
+                            source,
+                            options =>
+                            {
+                                options.ImageRefreshMode = MetadataRefreshMode.ValidationOnly;
+                                options.ReplaceAllImages = true;
+                                options.EnableThumbnailImageExtraction = true;
+                            },
+                            cancellationToken)
+                        .ConfigureAwait(false);
+                    if (result != null)
+                    {
+                        logger.Info($"{source}: 完成 {item.FileName ?? item.Name}");
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -415,6 +357,5 @@ namespace MediaInfoKeeper.Services
             TryCancel(cancellationTokenSource);
             cancellationTokenSource.Dispose();
         }
-
     }
 }

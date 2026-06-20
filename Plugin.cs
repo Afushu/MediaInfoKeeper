@@ -54,6 +54,7 @@ namespace MediaInfoKeeper
 
         public static Plugin Instance { get; private set; }
         public static MediaInfoService MediaInfoService { get; private set; }
+        public static MetaDataService MetaDataService { get; private set; }
         
         public static ChaptersStore ChaptersStore { get; private set; }
         public static MediaSourceInfoStore MediaSourceInfoStore { get; private set; }
@@ -178,8 +179,9 @@ namespace MediaInfoKeeper
             this.PlugginEnabled = initialOptions.MainPage?.PlugginEnabled ?? true;
             LogOptionsSnapshot(initialOptions, "已加载");
 
-            LibraryService = new LibraryService(libraryManager, providerManager, fileSystem, userManager, userDataManager, mediaMountManager);
+            LibraryService = new LibraryService(libraryManager, fileSystem, userManager, userDataManager, mediaMountManager);
             MediaInfoService = new MediaInfoService(libraryManager, mediaSourceManager, fileSystem);
+            MetaDataService = new MetaDataService(libraryManager, providerManager);
             ChaptersStore = new ChaptersStore(itemRepository, fileSystem, jsonSerializer);
             MediaSourceInfoStore = new MediaSourceInfoStore(libraryManager, itemRepository, fileSystem, jsonSerializer);
             EmbeddedInfoStore = new EmbeddedInfoStore(jsonSerializer);
@@ -228,7 +230,7 @@ namespace MediaInfoKeeper
                 var options = this.OptionsStore.GetOptions();
                 options.MainPage ??= new MainPageOptions();
                 options.MainPage.PrepareScheduledTaskEditorForUi();
-                options.GetMediaInfoOptions();
+                options.MediaInfo ??= new MediaInfoOptions();
                 return options;
             }
         }
@@ -274,7 +276,7 @@ namespace MediaInfoKeeper
             }
 
             options.MainPage ??= new MainPageOptions();
-            options.GetMediaInfoOptions();
+            options.MediaInfo ??= new MediaInfoOptions();
             options.IntroSkip ??= new IntroSkipOptions();
             options.GetNetWorkOptions();
             var effectiveUpdatePluginOptions = options.GetEffectiveUpdatePluginOptions();
@@ -288,7 +290,7 @@ namespace MediaInfoKeeper
             options.Debug ??= new DebugOptions();
 #endif
             options.IntroSkip.Initialize();
-            options.GetMediaInfoOptions().Initialize();
+            options.MediaInfo.Initialize();
             effectiveUpdatePluginOptions.Initialize();
             options.Enhance.Initialize();
             options.MetaData.Initialize();
@@ -339,7 +341,7 @@ namespace MediaInfoKeeper
             }
 
             options.MainPage ??= new MainPageOptions();
-            options.GetMediaInfoOptions();
+            options.MediaInfo ??= new MediaInfoOptions();
             options.IntroSkip ??= new IntroSkipOptions();
             var effectiveUpdatePluginOptions = options.GetEffectiveUpdatePluginOptions();
             if (string.IsNullOrWhiteSpace(effectiveUpdatePluginOptions.UpdateChannel))
@@ -393,7 +395,7 @@ namespace MediaInfoKeeper
         {
             var safeOptions = this.OptionsStore.GetOptions() ?? new PluginConfiguration();
             safeOptions.MainPage ??= new MainPageOptions();
-            safeOptions.GetMediaInfoOptions();
+            safeOptions.MediaInfo ??= new MediaInfoOptions();
 
             StrmFileWatcher?.Configure(this.PlugginEnabled, safeOptions.MainPage.FileChangeRefreshDelaySeconds);
         }
@@ -418,7 +420,7 @@ namespace MediaInfoKeeper
 
             options.MainPage ??= new MainPageOptions();
             options.MainPage.ScheduledTasksEditor ??= new MainPageOptions.ScheduledTaskEditorOptions();
-            options.GetMediaInfoOptions();
+            options.MediaInfo ??= new MediaInfoOptions();
             options.IntroSkip ??= new IntroSkipOptions();
             options.GetNetWorkOptions();
             options.Enhance ??= new EnhanceOptions();
@@ -593,7 +595,7 @@ namespace MediaInfoKeeper
                     // 如果不存在Json文件，则使用ffprobe 提取一次
                     if (shouldRefreshAfterRestore)
                     {
-                        if (!this.Options.GetMediaInfoOptions().ExtractMediaInfoOnItemAdded)
+                        if (!this.Options.MediaInfo.ExtractMediaInfoOnItemAdded)
                         {
                             this.logger.Info($"已关闭入库提取媒体信息，跳过提取 item={e.Item.FileName ?? e.Item.Path}");
                         }
@@ -602,28 +604,21 @@ namespace MediaInfoKeeper
                             // 恢复失败时先触发媒体信息提取，再写入 JSON。
                             this.logger.Info($"入库媒体信息: 媒体信息缺失，开始提取 item={e.Item.FileName ?? e.Item.Path}");
 
-                            // 触发一次刷新以提取 MediaInfo。
-                            using (FfProcessGuard.Allow())
-                            {
-                                // 构建用于媒体信息提取的刷新参数与库选项。
-                                var metadataRefreshOptions = new MetadataRefreshOptions(new DirectoryService(this.logger, this.fileSystem))
-                                {
-                                    EnableRemoteContentProbe = true,
-                                    MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                                    ImageRefreshMode = MetadataRefreshMode.FullRefresh,
-                                    ReplaceAllMetadata = true,
-                                    ReplaceAllImages = false
-                                };
-
-                                var itemCollectionFolders = this.libraryManager.GetCollectionFolders(e.Item).Cast<BaseItem>().ToArray();
-                                var itemLibraryOptions = this.libraryManager.GetLibraryOptions(e.Item);
-                                e.Item.DateLastRefreshed = new DateTimeOffset();
-                                await RefreshTaskRunner.RunAsync(
-                                        () => this.providerManager
-                                            .RefreshSingleItem(e.Item, metadataRefreshOptions, itemCollectionFolders, itemLibraryOptions, CancellationToken.None))
-                                    .ConfigureAwait(false);
-                            }
-                            this.logger.Info($"入库媒体信息: 提取完成并写入 JSON item={e.Item.FileName ?? e.Item.Path}");
+                            var extracted = await MediaInfoRunner
+                                .ExtractMediaInfoAsync(
+                                    e.Item.InternalId,
+                                    "入库媒体信息",
+                                    refreshOptions =>
+                                    {
+                                        refreshOptions.ImageRefreshMode = MetadataRefreshMode.FullRefresh;
+                                        refreshOptions.ReplaceAllImages = true;
+                                        refreshOptions.ReplaceAllMetadata = true;
+                                    },
+                                    CancellationToken.None)
+                                .ConfigureAwait(false);
+                            this.logger.Info(extracted
+                                ? $"入库媒体信息: 提取完成并写入 JSON item={e.Item.FileName ?? e.Item.Path}"
+                                : $"入库媒体信息: 提取失败 item={e.Item.FileName ?? e.Item.Path}");
                         }
                     }
                     // 使用Json媒体信息数据，恢复成功后扫描所在物理路径，确保库状态刷新。
@@ -665,11 +660,8 @@ namespace MediaInfoKeeper
                                 this.logger.Info($"刷新父级条目: {parentPath}");
                                 try
                                 {
-                                    var collectionFolders = this.libraryManager.GetCollectionFolders(parentFolder).Cast<BaseItem>().ToArray();
-                                    var libraryOptions = this.libraryManager.GetLibraryOptions(parentFolder);
-                                    await RefreshTaskRunner.RunAsync(
-                                            () => this.providerManager
-                                                .RefreshSingleItem(parentFolder, discoverOnlyOptions, collectionFolders, libraryOptions, CancellationToken.None))
+                                    await MetaDataRunner
+                                        .RefreshMetaDataAsync(parentFolder.InternalId, discoverOnlyOptions, CancellationToken.None)
                                         .ConfigureAwait(false);
                                 }
                                 catch (Exception refreshEx)
@@ -805,7 +797,7 @@ namespace MediaInfoKeeper
         {
             this.logger.Info($"{e.Item.Path} 删除媒体事件");
             // 未开启删除开关时直接跳过。
-            if (!this.Options.GetMediaInfoOptions().DeleteMediaInfoJsonOnRemove || !this.Options.MainPage.PlugginEnabled)
+            if (!this.Options.MediaInfo.DeleteMediaInfoJsonOnRemove || !this.Options.MainPage.PlugginEnabled)
             {
                 return;
             }
