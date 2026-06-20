@@ -55,7 +55,7 @@ namespace MediaInfoKeeper.Store
 
             document.Chapters = CreateForPersist(item);
             SaveDocuments(documents, document, mediaInfoJsonPath);
-            this.logger.Debug($"ChaptersStore Json写入章节信息成功: {(item.FileName ?? item.Path)}");
+            this.logger.Info($"ChaptersStore 写入章节信息成功: {(item.FileName ?? item.Path)}");
             return true;
         }
 
@@ -66,7 +66,7 @@ namespace MediaInfoKeeper.Store
             var document = documents.FirstOrDefault() ?? new MediaInfoDocument();
             document.Chapters = CreateForPersist(item);
             SaveDocuments(documents, document, mediaInfoJsonPath);
-            this.logger.Debug($"ChaptersStore 写入章节信息成功: {(item.FileName ?? item.Path)}");
+            this.logger.Info($"ChaptersStore 写入章节信息成功: {(item.FileName ?? item.Path)}");
         }
 
         private List<ChapterInfo> CreateForPersist(BaseItem item)

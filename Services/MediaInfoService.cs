@@ -79,16 +79,20 @@ namespace MediaInfoKeeper.Services
         /// <summary>构建 MediaInfo 提取所需的刷新选项。</summary>
         private MetadataRefreshOptions GetMediaInfoRefreshOptions()
         {
-            return new MetadataRefreshOptions(new DirectoryService(this.logger, this.fileSystem))
-            {
-                EnableRemoteContentProbe = true,
-                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
-                ReplaceAllMetadata = false,
-                ImageRefreshMode = MetadataRefreshMode.ValidationOnly,
-                ReplaceAllImages = false,
-                EnableThumbnailImageExtraction = Plugin.Instance.Options.MetaData.EnableImageCapture,
-                EnableSubtitleDownloading = false
-            };
+            var options = new MetadataRefreshOptions(new DirectoryService(this.logger, this.fileSystem));
+            ApplyMediaInfoOnlyRefreshOptions(options);
+            return options;
+        }
+
+        private static void ApplyMediaInfoOnlyRefreshOptions(MetadataRefreshOptions options)
+        {
+            options.EnableRemoteContentProbe = true;
+            options.MetadataRefreshMode = MetadataRefreshMode.ValidationOnly;
+            options.ReplaceAllMetadata = false;
+            options.ImageRefreshMode = MetadataRefreshMode.ValidationOnly;
+            options.ReplaceAllImages = false;
+            options.EnableThumbnailImageExtraction = false;
+            options.EnableSubtitleDownloading = false;
         }
 
         public MediaInfoDocument.MediaInfoRestoreResult RestorePersistedMediaInfo(BaseItem item)
@@ -142,7 +146,6 @@ namespace MediaInfoKeeper.Services
         public async Task<BaseItem> EnsureMediaInfoAsync(
             long internalId,
             string source,
-            Action<MetadataRefreshOptions> configureRefreshOptions = null,
             MediaStreamType[] requiredStreamTypes = null,
             CancellationToken cancellationToken = default)
         {
@@ -171,7 +174,7 @@ namespace MediaInfoKeeper.Services
             }
 
             var extracted = await MediaInfoRunner
-                .ExtractMediaInfoAsync(internalId, source, configureRefreshOptions, cancellationToken, requiredStreamTypes)
+                .ExtractMediaInfoAsync(internalId, source, cancellationToken, requiredStreamTypes)
                 .ConfigureAwait(false);
             if (!extracted)
             {
@@ -185,13 +188,11 @@ namespace MediaInfoKeeper.Services
         public async Task<BaseItem> EnsurePlaybackMediaInfoAsync(
             long internalId,
             string source,
-            Action<MetadataRefreshOptions> configureRefreshOptions = null,
             CancellationToken cancellationToken = default)
         {
             return await EnsureMediaInfoAsync(
                     internalId,
                     $"{source} 媒体信息提取",
-                    configureRefreshOptions,
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -220,15 +221,6 @@ namespace MediaInfoKeeper.Services
             workItem = await EnsureMediaInfoAsync(
                     workItem.InternalId,
                     source,
-                    options =>
-                    {
-                        options.MetadataRefreshMode = MetadataRefreshMode.ValidationOnly;
-                        options.ReplaceAllMetadata = false;
-                        options.ImageRefreshMode = MetadataRefreshMode.ValidationOnly;
-                        options.ReplaceAllImages = false;
-                        options.EnableThumbnailImageExtraction = false;
-                        options.EnableSubtitleDownloading = false;
-                    },
                     new[] { MediaStreamType.Audio },
                     cancellationToken)
                 .ConfigureAwait(false) as Video;
@@ -250,7 +242,6 @@ namespace MediaInfoKeeper.Services
         internal async Task<bool> ExtractMediaInfoAsync(
             BaseItem item,
             string source,
-            Action<MetadataRefreshOptions> configureRefreshOptions,
             CancellationToken cancellationToken,
             MediaStreamType[] requiredStreamTypes = null)
         {
@@ -277,7 +268,6 @@ namespace MediaInfoKeeper.Services
                         displayName,
                         attempt,
                         maxAttempts,
-                        configureRefreshOptions,
                         requiredStreamTypes,
                         cancellationToken)
                     .ConfigureAwait(false);
@@ -307,7 +297,6 @@ namespace MediaInfoKeeper.Services
             string displayName,
             int attempt,
             int maxAttempts,
-            Action<MetadataRefreshOptions> configureRefreshOptions,
             MediaStreamType[] requiredStreamTypes,
             CancellationToken cancellationToken)
         {
@@ -326,7 +315,6 @@ namespace MediaInfoKeeper.Services
                 }
 
                 var refreshOptions = GetMediaInfoRefreshOptions();
-                configureRefreshOptions?.Invoke(refreshOptions);
                 var directoryService = refreshOptions.DirectoryService;
 
                 if (IsMissingLocalFile(filePath, directoryService))
@@ -349,10 +337,9 @@ namespace MediaInfoKeeper.Services
                     this.logger.Info($"{source} 提取媒体信息恢复后仍无媒体流，继续刷新: {displayName}");
                 }
 
-                var attemptSuffix = maxAttempts > 1 ? $" 第 {attempt}/{maxAttempts} 次" : string.Empty;
-                this.logger.Info($"{source} 提取媒体信息刷新开始{attemptSuffix}: {displayName}");
+                var startAttemptSuffix = maxAttempts > 1 && attempt > 1 ? $" 第 {attempt}/{maxAttempts} 次" : string.Empty;
+                this.logger.Info($"{source} 提取媒体信息开始{startAttemptSuffix}: {displayName}");
 
-                item.DateLastRefreshed = new DateTimeOffset();
                 var collectionFolders = Plugin.LibraryManager.GetCollectionFolders(item).Cast<BaseItem>().ToArray();
                 var libraryOptions = Plugin.LibraryManager.GetLibraryOptions(item);
                 await Plugin.ProviderManager
@@ -361,11 +348,11 @@ namespace MediaInfoKeeper.Services
 
                 if (!HasRequiredMediaInfo(item, requiredStreamTypes))
                 {
-                    this.logger.Info($"{source} 提取媒体信息失败 无媒体流{attemptSuffix}: {displayName}");
+                    this.logger.Info($"{source} 提取媒体信息失败 无媒体流: {displayName}");
                     return MediaInfoExtractionAttemptResult.RetryableFailure;
                 }
 
-                this.logger.Info($"{source} 提取媒体信息成功{attemptSuffix}: {displayName}");
+                this.logger.Info($"{source} 提取媒体信息成功: {displayName}");
                 return MediaInfoExtractionAttemptResult.Succeeded;
             }
         }

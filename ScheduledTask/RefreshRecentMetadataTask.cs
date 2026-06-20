@@ -44,7 +44,7 @@ namespace MediaInfoKeeper.ScheduledTask
 
         public string Category => Plugin.TaskCategoryName;
 
-        public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
+        public Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
         {
             this.logger.Info("最近条目刷新元数据计划任务开始");
 
@@ -54,7 +54,7 @@ namespace MediaInfoKeeper.ScheduledTask
             {
                 progress.Report(100.0);
                 this.logger.Info("计划任务完成，条目数 0");
-                return;
+                return Task.CompletedTask;
             }
 
             var replaceMetadata = ShouldReplaceMetadata();
@@ -64,33 +64,22 @@ namespace MediaInfoKeeper.ScheduledTask
             var totalWork = total + metadataRefreshTargets.Count;
             this.logger.Info($"计划任务条目数{total}，元数据覆盖{replaceMetadata}，图片覆盖{replaceImages}，视频缩略图覆盖{replaceThumbnails}");
 
-            var completed = 0;
-            var tasks = items
-                .Select(async item =>
+            var submitted = 0;
+            foreach (var item in items)
+            {
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    try
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        await ProcessItemAsync(item, replaceMetadata, replaceImages, replaceThumbnails, cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        this.logger.Info($"计划任务已取消 {item.Path}");
-                    }
-                    catch (Exception e)
-                    {
-                        this.logger.Error($"计划任务失败: {item.Path}");
-                        this.logger.Error(e.Message);
-                        this.logger.Debug(e.StackTrace);
-                    }
-                    finally
-                    {
-                        ReportProgress(totalWork, progress, Interlocked.Increment(ref completed));
-                    }
-                })
-                .ToList();
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+                    this.logger.Info($"计划任务已取消 {item.Path}");
+                    break;
+                }
+
+                FireAndForgetItemRefresh(
+                    item,
+                    replaceMetadata,
+                    replaceImages,
+                    replaceThumbnails);
+                ReportProgress(totalWork, progress, ++submitted);
+            }
 
             if (metadataRefreshTargets.Count > 0)
             {
@@ -98,15 +87,55 @@ namespace MediaInfoKeeper.ScheduledTask
             }
             foreach (var target in metadataRefreshTargets)
             {
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    await RefreshMetadataForDoubanRoleAsync(target, cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
+                if (cancellationToken.IsCancellationRequested)
                 {
                     this.logger.Info($"计划任务已取消 itemid={target.ItemId}");
-                    throw;
+                    break;
+                }
+
+                FireAndForgetDoubanRoleRefresh(target);
+                ReportProgress(totalWork, progress, ++submitted);
+            }
+
+            progress.Report(100.0);
+            this.logger.Info("最近条目刷新元数据计划任务已提交后台执行");
+            return Task.CompletedTask;
+        }
+
+        private void FireAndForgetItemRefresh(
+            BaseItem item,
+            bool replaceMetadata,
+            bool replaceImages,
+            bool replaceThumbnails)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ProcessItemAsync(
+                            item,
+                            replaceMetadata,
+                            replaceImages,
+                            replaceThumbnails,
+                            CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    this.logger.Error($"计划任务失败: {item.Path}");
+                    this.logger.Error(e.Message);
+                    this.logger.Debug(e.StackTrace);
+                }
+            });
+        }
+
+        private void FireAndForgetDoubanRoleRefresh(RoleRefreshTarget target)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await RefreshMetadataForDoubanRoleAsync(target, CancellationToken.None).ConfigureAwait(false);
                 }
                 catch (Exception e)
                 {
@@ -114,13 +143,7 @@ namespace MediaInfoKeeper.ScheduledTask
                     this.logger.Error(e.Message);
                     this.logger.Debug(e.StackTrace);
                 }
-                finally
-                {
-                    ReportProgress(totalWork, progress, Interlocked.Increment(ref completed));
-                }
-            }
-
-            this.logger.Info("最近条目刷新元数据计划任务完成");
+            });
         }
 
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()

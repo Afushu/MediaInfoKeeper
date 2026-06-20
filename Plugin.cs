@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Threading;
+using System.Threading.Tasks;
 using Emby.Web.GenericEdit.Elements;
 using MediaInfoKeeper.Common;
 using MediaInfoKeeper.Options;
@@ -565,11 +566,14 @@ namespace MediaInfoKeeper
                     return;
                 }
                 this.logger.Info($"新入库事件 {e.Item.FileName ?? e.Item.Path}");
-
+                
+                // 异步刷新一次元数据，让 Emby 刮削。
+                _ = MetaDataRunner.RefreshMetaDataAsync(e.Item.InternalId);
+                
                 if (!LibraryService.IsItemInCatchupLibraryScope(e.Item))
                 {
                     // 条目不在选定媒体库范围内。
-                    this.logger.Info("跳过处理: 不在选定媒体库范围");
+                    this.logger.Info("跳过处理: 不在选定媒体库范围，不提取媒体信息");
                     return;
                 }
 
@@ -599,24 +603,32 @@ namespace MediaInfoKeeper
                         }
                         else
                         {
-                            // 恢复失败时先触发媒体信息提取，再写入 JSON。
-                            this.logger.Info($"入库媒体信息: 媒体信息缺失，开始提取 item={e.Item.FileName ?? e.Item.Path}");
+                            var itemId = e.Item.InternalId;
+                            var itemDisplayName = e.Item.FileName ?? e.Item.Path;
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    // 恢复失败时先触发媒体信息提取，再写入 JSON。
+                                    this.logger.Info($"入库媒体信息: 媒体信息缺失，开始提取 item={itemDisplayName}");
 
-                            var extracted = await MediaInfoRunner
-                                .ExtractMediaInfoAsync(
-                                    e.Item.InternalId,
-                                    "入库媒体信息",
-                                    refreshOptions =>
-                                    {
-                                        refreshOptions.ImageRefreshMode = MetadataRefreshMode.FullRefresh;
-                                        refreshOptions.ReplaceAllImages = true;
-                                        refreshOptions.ReplaceAllMetadata = true;
-                                    },
-                                    CancellationToken.None)
-                                .ConfigureAwait(false);
-                            this.logger.Info(extracted
-                                ? $"入库媒体信息: 提取完成 item={e.Item.FileName ?? e.Item.Path}"
-                                : $"入库媒体信息: 提取失败 item={e.Item.FileName ?? e.Item.Path}");
+                                    var extracted = await MediaInfoRunner
+                                        .ExtractMediaInfoAsync(
+                                            itemId,
+                                            "入库媒体信息",
+                                            cancellationToken: CancellationToken.None)
+                                        .ConfigureAwait(false);
+                                    this.logger.Info(extracted
+                                        ? $"入库媒体信息: 提取完成 item={itemDisplayName}"
+                                        : $"入库媒体信息: 提取失败 item={itemDisplayName}");
+                                }
+                                catch (Exception extractEx)
+                                {
+                                    this.logger.Error($"入库媒体信息: 提取异常 item={itemDisplayName}");
+                                    this.logger.Error(extractEx.Message);
+                                    this.logger.Debug(extractEx.StackTrace);
+                                }
+                            });
                         }
                     }
                     // 使用Json媒体信息数据，恢复成功后扫描所在物理路径，确保库状态刷新。

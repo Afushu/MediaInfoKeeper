@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using HarmonyLib;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Logging;
+using MediaInfoKeeper.Store;
 
 namespace MediaInfoKeeper.Patch
 {
@@ -148,6 +149,11 @@ namespace MediaInfoKeeper.Patch
         public static bool HasExplicitAllowance()
         {
             return FindAllowedScope() != null;
+        }
+
+        public static bool HasActiveItemProbe()
+        {
+            return FindScopeWithItemContext() != null;
         }
 
         public static void EndAllow(AllowanceHandle handle = null)
@@ -591,12 +597,12 @@ namespace MediaInfoKeeper.Patch
             return null;
         }
 
-        private static object AwaitProcessTask(Task task, bool inspectProcessResult)
+        private static object AwaitProcessTask(Task task, bool shouldPersistAfterSuccess)
         {
             var taskType = task.GetType();
             if (taskType == typeof(Task))
             {
-                return AwaitTask(task);
+                return AwaitTask(task, shouldPersistAfterSuccess);
             }
 
             var resultType = GetTaskResultType(taskType);
@@ -605,26 +611,25 @@ namespace MediaInfoKeeper.Patch
                 var method = typeof(FfProcessGuard)
                     .GetMethod(nameof(AwaitGenericTask), BindingFlags.Static | BindingFlags.NonPublic)
                     ?.MakeGenericMethod(resultType);
-                return method?.Invoke(null, new object[] { task, inspectProcessResult }) ?? task;
+                return method?.Invoke(null, new object[] { task, shouldPersistAfterSuccess }) ?? task;
             }
 
             return task;
         }
 
-        private static async Task AwaitTask(Task task)
+        private static async Task AwaitTask(Task task, bool shouldPersistAfterSuccess)
         {
             await task.ConfigureAwait(false);
+            if (shouldPersistAfterSuccess)
+            {
+                _ = PersistCurrentScopeMediaInfoAsync();
+            }
         }
 
-        private static async Task<T> AwaitGenericTask<T>(Task<T> task, bool inspectProcessResult)
+        private static async Task<T> AwaitGenericTask<T>(Task<T> task, bool shouldPersistAfterSuccess)
         {
             var result = await task.ConfigureAwait(false);
             if (result == null)
-            {
-                return result;
-            }
-
-            if (!inspectProcessResult)
             {
                 return result;
             }
@@ -650,7 +655,56 @@ namespace MediaInfoKeeper.Patch
                 }
             }
 
+            if (shouldPersistAfterSuccess)
+            {
+                var exitCodeValue = exitCode?.GetValue(result);
+                var nullableExitCode = exitCodeValue as int?;
+                if ((exitCodeValue is int exitCodeNumber && exitCodeNumber == 0) ||
+                    (nullableExitCode.HasValue && nullableExitCode.GetValueOrDefault(-1) == 0))
+                {
+                    _ = PersistCurrentScopeMediaInfoAsync();
+                }
+            }
+
             return result;
+        }
+
+        private static async Task PersistCurrentScopeMediaInfoAsync()
+        {
+            if (Plugin.Instance?.Options?.MainPage?.PlugginEnabled != true)
+            {
+                return;
+            }
+
+            var scope = FindScopeWithItemContext();
+            if (scope == null)
+            {
+                logger?.Info("ffprobe 落盘未触发: 当前作用域没有条目上下文");
+                return;
+            }
+
+            var context = scope.Handle.Context;
+            for (var attempt = 0; attempt <= 5; attempt++)
+            {
+                var item = Plugin.LibraryManager?.GetItemById(context.ItemInternalId);
+                var displayName = item?.FileName ?? item?.Path;
+
+                if (item != null && Plugin.MediaInfoService?.HasMediaInfo(item) == true)
+                {
+                    logger?.Info($"新提取 {displayName} 媒体信息，覆盖写入Json");
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(3000).ConfigureAwait(false);
+                        Plugin.MediaSourceInfoStore?.OverWriteToFile(item);
+                    });
+                    return;
+                }
+
+                if (attempt < 5)
+                {
+                    await Task.Delay(1000).ConfigureAwait(false);
+                }
+            }
         }
 
         private static Type GetTaskResultType(Type taskType)
@@ -664,6 +718,23 @@ namespace MediaInfoKeeper.Patch
                 }
 
                 current = current.BaseType;
+            }
+
+            return null;
+        }
+
+        private static ScopeFrame FindScopeWithItemContext()
+        {
+            var scope = CurrentScope.Value;
+            while (scope != null)
+            {
+                var context = scope.Handle?.Context;
+                if (context?.ItemInternalId > 0 && context.AllowFfprocess)
+                {
+                    return scope;
+                }
+
+                scope = scope.Previous;
             }
 
             return null;

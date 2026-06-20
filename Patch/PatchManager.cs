@@ -148,6 +148,15 @@ namespace MediaInfoKeeper.Patch
 
             registrations.Add(new PatchRegistration
             {
+                Name = "FFProbeHasChanged",
+                Initialize = _ => FFProbeHasChanged.Initialize(logger, true),
+                Configure = options => FFProbeHasChanged.Configure(IsPluginEnabled(options)),
+                IsEnabled = options => IsPluginEnabled(options),
+                IsReady = () => FFProbeHasChanged.IsReady
+            });
+
+            registrations.Add(new PatchRegistration
+            {
                 Name = "IsoProbeInput",
                 Initialize = _ => IsoProbeInput.Initialize(logger, true),
                 Configure = _ => IsoProbeInput.Configure(true),
@@ -340,15 +349,6 @@ namespace MediaInfoKeeper.Patch
                 Configure = options => ChapterJsonSync.Configure(IsPluginEnabled(options)),
                 IsEnabled = options => IsPluginEnabled(options),
                 IsReady = () => ChapterJsonSync.IsReady
-            });
-
-            registrations.Add(new PatchRegistration
-            {
-                Name = "MediaInfoJsonSync",
-                Initialize = _ => MediaInfoJsonSync.Initialize(logger, true),
-                Configure = options => MediaInfoJsonSync.Configure(IsPluginEnabled(options)),
-                IsEnabled = options => IsPluginEnabled(options),
-                IsReady = () => MediaInfoJsonSync.IsReady
             });
 
             registrations.Add(new PatchRegistration

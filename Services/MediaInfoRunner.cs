@@ -1,8 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
-using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 
 namespace MediaInfoKeeper.Services
@@ -10,6 +10,9 @@ namespace MediaInfoKeeper.Services
     public static class MediaInfoRunner
     {
         private static readonly object GateSync = new object();
+        private static readonly object ExtractionSync = new object();
+        private static readonly Dictionary<long, Task<bool>> RunningExtractions =
+            new Dictionary<long, Task<bool>>();
         private static int configuredConcurrency;
         private static int activeCount;
         private static TaskCompletionSource<bool> availability =
@@ -18,9 +21,52 @@ namespace MediaInfoKeeper.Services
         public static async Task<bool> ExtractMediaInfoAsync(
             long internalId,
             string source = "媒体信息提取",
-            Action<MetadataRefreshOptions> configureRefreshOptions = null,
             CancellationToken cancellationToken = default,
             MediaStreamType[] requiredStreamTypes = null)
+        {
+            var item = Plugin.LibraryManager?.GetItemById(internalId) as BaseItem;
+            if (item == null)
+            {
+                return false;
+            }
+
+            var displayName = item.FileName ?? item.Path ?? item.Name;
+            Task<bool> extractionTask;
+            var isOwner = false;
+            lock (ExtractionSync)
+            {
+                if (!RunningExtractions.TryGetValue(internalId, out extractionTask))
+                {
+                    extractionTask = RunExtractionAsync(internalId, source, cancellationToken, requiredStreamTypes);
+                    RunningExtractions[internalId] = extractionTask;
+                    isOwner = true;
+                }
+            }
+
+            if (!isOwner)
+            {
+                Plugin.SharedLogger?.Info($"{source} 提取媒体信息跳过 已在队列: {displayName}");
+                return await extractionTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            try
+            {
+                return await extractionTask.ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (ExtractionSync)
+                {
+                    RunningExtractions.Remove(internalId);
+                }
+            }
+        }
+
+        private static async Task<bool> RunExtractionAsync(
+            long internalId,
+            string source,
+            CancellationToken cancellationToken,
+            MediaStreamType[] requiredStreamTypes)
         {
             var item = Plugin.LibraryManager?.GetItemById(internalId) as BaseItem;
             if (item == null)
@@ -31,8 +77,14 @@ namespace MediaInfoKeeper.Services
             await WaitForTurnAsync(cancellationToken).ConfigureAwait(false);
             try
             {
+                item = Plugin.LibraryManager?.GetItemById(internalId) as BaseItem;
+                if (item == null)
+                {
+                    return false;
+                }
+
                 return await Plugin.MediaInfoService
-                    .ExtractMediaInfoAsync(item, source, configureRefreshOptions, cancellationToken, requiredStreamTypes)
+                    .ExtractMediaInfoAsync(item, source, cancellationToken, requiredStreamTypes)
                     .ConfigureAwait(false);
             }
             finally

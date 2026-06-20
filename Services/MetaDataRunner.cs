@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Model.IO;
 
 namespace MediaInfoKeeper.Services
 {
@@ -31,6 +32,47 @@ namespace MediaInfoKeeper.Services
             {
                 ReleaseTurn();
             }
+        }
+
+        public static async Task RefreshMetaDataAsync(
+            long internalId,
+            CancellationToken cancellationToken = default)
+        {
+            var item = Plugin.LibraryManager?.GetItemById(internalId) as BaseItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            var displayName = item.FileName ?? item.Path ?? item.Name;
+            var logger = Plugin.SharedLogger;
+            var refreshOptions = GetRefreshOptions();
+
+            try
+            {
+                await RefreshMetaDataAsync(internalId, refreshOptions, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger?.Error($"入库元数据: 刷新失败 item={displayName}");
+                logger?.Error(ex.Message);
+                logger?.Debug(ex.StackTrace);
+            }
+        }
+
+        private static MetadataRefreshOptions GetRefreshOptions()
+        {
+            return new MetadataRefreshOptions(new DirectoryService(Plugin.SharedLogger, Plugin.FileSystem))
+            {
+                EnableRemoteContentProbe = false,
+                MetadataRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllMetadata = true,
+                ImageRefreshMode = MetadataRefreshMode.FullRefresh,
+                ReplaceAllImages = true,
+                EnableThumbnailImageExtraction = Plugin.Instance.Options.MetaData.EnableImageCapture,
+                EnableSubtitleDownloading = false
+            };
         }
 
         private static async Task WaitForTurnAsync(CancellationToken cancellationToken)

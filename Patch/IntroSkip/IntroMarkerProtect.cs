@@ -444,7 +444,7 @@ namespace MediaInfoKeeper.Patch
             var displayName = FormatItem(item, itemId);
             if (HasAnyStoredChapters(item))
             {
-                logger?.Info($"已阻止章节信息丢失: {displayName}, 原因: {reason}");
+                logger?.Info($"已阻止章节信息丢失: {FormatItemName(item, itemId)}");
                 return false;
             }
 
@@ -455,6 +455,11 @@ namespace MediaInfoKeeper.Patch
         private static string FormatItem(BaseItem item, long itemId)
         {
             return $"{item?.FileName ?? item?.Path ?? itemId.ToString()}, itemId: {itemId}";
+        }
+
+        private static string FormatItemName(BaseItem item, long itemId)
+        {
+            return item?.FileName ?? item?.Path ?? itemId.ToString();
         }
 
         private static bool HasAnyStoredChapters(BaseItem item)

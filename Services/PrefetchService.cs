@@ -8,7 +8,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Providers;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Logging;
 
@@ -240,13 +239,7 @@ namespace MediaInfoKeeper.Services
                         .EnsurePlaybackMediaInfoAsync(
                             item.InternalId,
                             source,
-                            options =>
-                            {
-                                options.ImageRefreshMode = MetadataRefreshMode.ValidationOnly;
-                                options.ReplaceAllImages = true;
-                                options.EnableThumbnailImageExtraction = true;
-                            },
-                            cancellationToken)
+                            cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
                     if (result != null)
                     {

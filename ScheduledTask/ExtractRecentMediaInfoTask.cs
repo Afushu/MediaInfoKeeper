@@ -36,7 +36,7 @@ namespace MediaInfoKeeper.ScheduledTask
             return Array.Empty<TaskTriggerInfo>();
         }
 
-        public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
+        public Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
         {
             this.logger.Info("计划任务执行");
 
@@ -46,43 +46,43 @@ namespace MediaInfoKeeper.ScheduledTask
             {
                 progress.Report(100.0);
                 this.logger.Info("计划任务完成，条目数 0");
-                return;
+                return Task.CompletedTask;
             }
 
-            var completed = 0;
-            var tasks = items
-                .Select(async item =>
+            var submitted = 0;
+            foreach (var item in items)
+            {
+                if (cancellationToken.IsCancellationRequested)
                 {
-                    try
-                    {
-                        if (cancellationToken.IsCancellationRequested)
-                        {
-                            return;
-                        }
+                    this.logger.Info($"计划任务已取消 {item.Path ?? item.Name}");
+                    break;
+                }
 
-                        await ProcessItemAsync(item, "Recent Scheduled Task", cancellationToken)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        // ignore
-                    }
-                    catch (Exception ex)
-                    {
-                        this.logger.Error($"任务执行失败: {item.Path ?? item.Name}");
-                        this.logger.Error(ex.Message);
-                        this.logger.Debug(ex.StackTrace);
-                    }
-                    finally
-                    {
-                        var done = Interlocked.Increment(ref completed);
-                        progress?.Report(done / (double)total * 100);
-                    }
-                })
-                .ToList();
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+                FireAndForgetItemExtraction(item);
+                progress?.Report(++submitted / (double)total * 100);
+            }
 
-            this.logger.Info("计划任务完成");
+            progress.Report(100.0);
+            this.logger.Info("计划任务已提交后台执行");
+            return Task.CompletedTask;
+        }
+
+        private void FireAndForgetItemExtraction(BaseItem item)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await ProcessItemAsync(item, "Recent Scheduled Task", CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    this.logger.Error($"任务执行失败: {item.Path ?? item.Name}");
+                    this.logger.Error(ex.Message);
+                    this.logger.Debug(ex.StackTrace);
+                }
+            });
         }
 
         private List<BaseItem> FetchRecentScopedItems()
