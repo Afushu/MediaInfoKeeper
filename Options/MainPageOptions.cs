@@ -429,10 +429,10 @@ namespace MediaInfoKeeper.Options
             }
 
             AddGroup("插件", string.Empty,
+                nameof(RefreshQueueStatus),
                 nameof(PlugginEnabled),
                 nameof(FileChangeRefreshDelaySeconds),
-                nameof(CatchupLibraries),
-                nameof(RefreshQueueStatus));
+                nameof(CatchupLibraries));
 
             AddGroup("计划任务配置", string.Empty,
                 nameof(ScheduledTaskEntries),
