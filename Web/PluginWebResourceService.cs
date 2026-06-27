@@ -197,7 +197,7 @@ namespace MediaInfoKeeper.Web
 
         public MediaInfoMenuResponse Post(ExtractMediaInfoRequest request)
         {
-            return _extractHandler.HandleAsync(request).GetAwaiter().GetResult();
+            return _extractHandler.Handle(request);
         }
 
         public MediaInfoMenuResponse Post(DeleteMediaInfoPersistRequest request)

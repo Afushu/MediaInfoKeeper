@@ -282,10 +282,6 @@ namespace MediaInfoKeeper.Services
                     return false;
                 }
 
-                if (attempt < maxAttempts)
-                {
-                    this.logger.Info($"{source} 提取媒体信息刷新后仍无媒体流，准备重试 第 {attempt + 1}/{maxAttempts} 次: {displayName}");
-                }
             }
 
             return false;
@@ -348,7 +344,6 @@ namespace MediaInfoKeeper.Services
 
                 if (!HasRequiredMediaInfo(item, requiredStreamTypes))
                 {
-                    this.logger.Info($"{source} 提取媒体信息失败 无媒体流: {displayName}");
                     return MediaInfoExtractionAttemptResult.RetryableFailure;
                 }
 

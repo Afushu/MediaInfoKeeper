@@ -5,8 +5,10 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Persistence;
+using MediaBrowser.Controller.Providers;
 using MediaBrowser.Model.Entities;
 using MediaInfoKeeper.Patch;
+using MediaInfoKeeper.Store;
 
 namespace MediaInfoKeeper.Web.Handler
 {
@@ -97,8 +99,6 @@ namespace MediaInfoKeeper.Web.Handler
                 return false;
             }
 
-            Plugin.MediaSourceInfoStore?.DeleteFromFile(workItem);
-
             using (MediaInfoClearGuard.Allow())
             {
                 _itemRepository.SaveMediaStreams(workItem.InternalId, new List<MediaStream>(), CancellationToken.None);
@@ -110,6 +110,11 @@ namespace MediaInfoKeeper.Web.Handler
             workItem.Container = null;
             workItem.Size = 0;
             workItem.UpdateToRepository(ItemUpdateType.MetadataEdit);
+
+            MediaInfoDocument.DeleteMediaInfoJson(
+                workItem,
+                new DirectoryService(Plugin.SharedLogger, Plugin.FileSystem),
+                "快捷菜单");
             return true;
         }
     }

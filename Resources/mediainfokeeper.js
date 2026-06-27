@@ -365,6 +365,18 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
         return item.Guid || item.Id || '';
     }
 
+    function getCommandItemId(item) {
+        if (!item) {
+            return '';
+        }
+
+        if (isLibraryItem(item)) {
+            return item.ItemId || item.Id || item.Guid || '';
+        }
+
+        return item.Id || item.ItemId || item.Guid || '';
+    }
+
     function getLibraryDisplayName(item) {
         if (!item) {
             return '';
@@ -839,6 +851,8 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
 
                 if (libraryItems.length === 1) {
                     commands.push({ name: getCopyLibraryCommandName(), id: 'copy_library', icon: 'content_copy' });
+                    commands.push({ name: getCommandName(), id: 'extract_media_info', icon: '4k' });
+                    commands.push({ name: getDeleteCommandName(), id: 'delete_media_info_persist', icon: 'delete_forever' });
                 }
 
                 if (!items.length) {
@@ -871,7 +885,7 @@ define(['connectionManager', 'globalize', 'loading', 'toast', 'confirm'], functi
                     return api.copyLibrary(items);
                 }
 
-                const ids = items.map(item => item && item.Id).filter(Boolean);
+                const ids = items.map(getCommandItemId).filter(Boolean);
                 if (!ids.length) {
                     return;
                 }

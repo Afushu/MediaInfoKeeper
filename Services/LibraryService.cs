@@ -360,6 +360,19 @@ namespace MediaInfoKeeper.Services
                     continue;
                 }
 
+                if (item is CollectionFolder collectionFolder)
+                {
+                    foreach (var mediaItem in ExpandCollectionFolder(collectionFolder))
+                    {
+                        if (mediaItem.ExtraType == null && known.Add(mediaItem.InternalId))
+                        {
+                            targets.Add(mediaItem);
+                        }
+                    }
+
+                    continue;
+                }
+
                 if (!(item is Series || item is Season))
                 {
                     continue;
@@ -376,6 +389,22 @@ namespace MediaInfoKeeper.Services
             }
 
             return targets;
+        }
+
+        private List<BaseItem> ExpandCollectionFolder(CollectionFolder collectionFolder)
+        {
+            if (collectionFolder == null)
+            {
+                return new List<BaseItem>();
+            }
+
+            var paths = GetScopedLibraryPaths(collectionFolder.InternalId.ToString(), out _);
+            if (paths.Count == 0)
+            {
+                return new List<BaseItem>();
+            }
+
+            return FetchScopedVideoItems(paths, includeAudio: true);
         }
 
         private IEnumerable<Audio> ExpandToAudioItems(BaseItem item)

@@ -16,7 +16,7 @@ namespace MediaInfoKeeper.Web.Handler
             _expandToTargetItems = expandToTargetItems;
         }
 
-        public async Task<MediaInfoMenuResponse> HandleAsync(ExtractMediaInfoRequest request)
+        public MediaInfoMenuResponse Handle(ExtractMediaInfoRequest request)
         {
             var response = new MediaInfoMenuResponse();
 
@@ -48,15 +48,8 @@ namespace MediaInfoKeeper.Web.Handler
                 response.Processed++;
                 try
                 {
-                    var result = await ExtractSingleItemAsync(item).ConfigureAwait(false);
-                    if (result)
-                    {
-                        response.Succeeded++;
-                    }
-                    else
-                    {
-                        response.Skipped++;
-                    }
+                    FireAndForgetExtractSingleItem(item);
+                    response.Succeeded++;
                 }
                 catch (Exception ex)
                 {
@@ -67,17 +60,33 @@ namespace MediaInfoKeeper.Web.Handler
                 }
             }
 
-            response.Message = "ok";
+            response.Message = "submitted";
             Plugin.Instance.Logger.Info(
                 $"ShortcutMenu ExtractMediaInfo result: total={response.Total}, processed={response.Processed}, succeeded={response.Succeeded}, failed={response.Failed}, skipped={response.Skipped}, message={response.Message}");
             return response;
         }
 
-        private static async Task<bool> ExtractSingleItemAsync(BaseItem item)
+        private static void FireAndForgetExtractSingleItem(BaseItem item)
         {
-            return await MediaInfoRunner
-                .ExtractMediaInfoAsync(item.InternalId, "快捷菜单")
-                .ConfigureAwait(false);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var result = await MediaInfoRunner
+                        .ExtractMediaInfoAsync(item.InternalId, "快捷菜单")
+                        .ConfigureAwait(false);
+                    if (!result)
+                    {
+                        Plugin.Instance.Logger.Info($"快捷菜单提取媒体信息失败或跳过: {item.Path ?? item.Name}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Plugin.Instance.Logger.Error($"快捷菜单提取媒体信息失败: {item.Path ?? item.Name}");
+                    Plugin.Instance.Logger.Error(ex.Message);
+                    Plugin.Instance.Logger.Debug(ex.StackTrace);
+                }
+            });
         }
     }
 }
