@@ -1,0 +1,139 @@
+name: Bug 报告
+description: 只提交可复现、有日志、已排除使用问题的 Bug
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这里不是使用咨询区。
+
+        只提交已经自行排查过、可以复现、并且提供完整日志文件的 Bug。使用方式错误等其他问题的 Issue，可能会被直接关闭。
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: 提交前确认
+      options:
+        - label: 我已经使用最新可用插件，并确认 Emby 版本在支持范围内
+          required: true
+        - label: 我已经排除配置项、权限、路径或媒体文件本身导致的问题
+          required: true
+        - label: 我已经搜索过现有 Issues，没有找到相同问题
+          required: true
+        - label: 我已经使用 LLM 分析过日志，并会提供完整 Emby 日志文件
+          required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: MediaInfoKeeper 版本
+      description: 可在插件页面或下载文件来源中查看。
+      placeholder: 例如：1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: emby-version
+    attributes:
+      label: Emby 版本
+      description: 请填写完整版本号。
+      placeholder: 例如：4.9.5.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 运行平台
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Docker
+        - 群晖 / Synology
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Bug 描述
+      description: 说明发生了什么，以及影响了哪个功能。不要只写“不能用”“异常”“失效”。
+      placeholder: 例如：重启 Emby 后插件无法加载，或外部字幕信息没有保留。
+    validations:
+      required: true
+
+  - type: textarea
+    id: why-bug
+    attributes:
+      label: 为什么你认为这是 MediaInfoKeeper 的 Bug
+      description: 说明你已经排除了哪些使用问题。无法说明的，请先不要提交 Issue。
+      placeholder: |
+        例如：
+        - 相同媒体在禁用插件后行为正常 / 异常消失
+        - 插件更新前正常，更新后在相同配置下稳定复现
+        - 已确认不是 Emby 不支持版本、插件文件名错误、权限问题或配置项导致
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 简要说明触发问题的关键操作。不能复现的问题通常无法处理。
+      placeholder: |
+        例如：更新插件后重启 Emby，扫描媒体库时出现问题。
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+      placeholder: 你原本期望发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      placeholder: 实际发生了什么？是否有错误提示？
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志文件
+      description: 必须上传完整 Emby 日志文件，或使用 Markdown 代码块粘贴完整日志内容。截图、片段、口头描述、“没有日志”都不算有效日志。提交前请自行删除隐私信息。
+      render: text
+      placeholder: |
+        将完整日志文件拖到输入框，或按下面格式粘贴完整日志内容：
+
+        ```
+        在这里粘贴完整日志内容
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 相关补充
+      description: 如果问题只在特定功能、媒体或配置下出现，可以简单说明。
+      placeholder: |
+        例如：只在外部字幕、媒体库扫描或某个配置开启后出现。
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 其他补充
+      description: 可以附上截图、临时解决方式或你已经尝试过的排查步骤。截图不能替代日志文件。
+    validations:
+      required: false
