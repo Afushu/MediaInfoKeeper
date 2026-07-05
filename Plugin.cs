@@ -629,7 +629,7 @@ namespace MediaInfoKeeper
                         // 仅处理音视频条目,补刷 Series Season 等等。
                         if (item is Folder)
                         {
-                            _ = MetaDataRunner.RefreshMetaDataAsync(itemId, priority: RefreshPriority.Highest, allowFfProcess:false);
+                            _ = MetaDataRunner.RefreshMetaDataAsync(itemId, priority: RefreshPriority.Highest, allowFfProcess:true);
                         }
                         return;
                     }
@@ -639,7 +639,7 @@ namespace MediaInfoKeeper
                     {
                         // 条目不在选定媒体库范围内。
                         this.logger.Info("跳过处理: 不在选定媒体库范围，不提取媒体信息");
-                        _ = MetaDataRunner.RefreshMetaDataAsync(itemId, priority: RefreshPriority.Highest, allowFfProcess:true);
+                        _ = MetaDataRunner.RefreshMetaDataAsync(itemId, priority: RefreshPriority.Highest, allowFfProcess: false);
                         return;
                     }
 
