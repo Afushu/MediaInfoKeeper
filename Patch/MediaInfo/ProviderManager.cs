@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using HarmonyLib;
-using MediaInfoKeeper.Services;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Providers;
@@ -13,9 +12,8 @@ using MediaBrowser.Model.Logging;
 namespace MediaInfoKeeper.Patch
 {
     /// <summary>
-    /// 在 ProviderManager 刷新媒体项期间按条目类型临时放行 ffprobe/ffmpeg。
-    /// 常规刷新只放行真实音视频文件；strm/shortcut 保持拦截，避免 Emby 用远端探测结果覆盖已保存的 MediaInfo。
-    /// 插件主动提取时外层会先开显式 scope，此处继承外层放行。
+    /// 在 ProviderManager 刷新媒体项期间携带条目上下文。
+    /// 仅继承插件外层显式 ffprobe/ffmpeg 放行；普通 Emby 刷新不因条目类型自动放行。
     /// </summary>
     public static class ProviderManager
     {
@@ -25,7 +23,8 @@ namespace MediaInfoKeeper.Patch
         private static MethodInfo refreshSingleItem;
         private static ILogger logger;
 
-        public static bool IsReady => harmony != null && (refreshItem != null || refreshItemByNameChildren != null || refreshSingleItem != null);
+        public static bool IsReady => harmony != null &&
+                                      (refreshItem != null || refreshItemByNameChildren != null || refreshSingleItem != null);
 
         public static void Initialize(ILogger pluginLogger, bool enabled)
         {
@@ -102,7 +101,7 @@ namespace MediaInfoKeeper.Patch
 
         public static void Configure(bool enabled)
         {
-            // 跟随 FfprobeGuard 启用状态，当前实现为一次性安装。
+            // Harmony 安装后不卸载；是否真正放行由外层显式 scope 决定。
         }
 
         private static MethodInfo ResolveMethod(
@@ -204,7 +203,7 @@ namespace MediaInfoKeeper.Patch
 
             if (__result is Task task)
             {
-                __result = AwaitWithScope(task, __state, __0);
+                __result = AwaitWithScope(task, __state);
                 return;
             }
 
@@ -219,21 +218,11 @@ namespace MediaInfoKeeper.Patch
             }
 
             var itemPath = item.Path ?? item.FileName;
-            var isShortcut = LibraryService.IsFileShortcut(itemPath);
-            var isMediaFileItem = item is Video || item is Audio;
-
-            var allowFfProcess = isMediaFileItem && !string.IsNullOrWhiteSpace(itemPath) && !isShortcut;
-            if (!allowFfProcess && FfProcessGuard.HasExplicitAllowance())
-            {
-                allowFfProcess = true;
-            }
-
             return FfProcessGuard.BeginAllow(new FfProcessGuard.AllowanceContext
             {
                 ItemInternalId = item.InternalId,
                 ItemPath = itemPath,
-                IsShortcut = isShortcut,
-                AllowFfProcess = allowFfProcess
+                AllowFfProcess = FfProcessGuard.HasExplicitAllowance()
             });
         }
 
@@ -244,19 +233,19 @@ namespace MediaInfoKeeper.Patch
                 return;
             }
 
-            task = task == null ? null : AwaitTask(task, allowance, item);
+            task = task == null ? null : AwaitTask(task, allowance);
             if (task == null)
             {
                 FfProcessGuard.EndAllow(allowance);
             }
         }
 
-        private static object AwaitWithScope(Task task, FfProcessGuard.AllowanceHandle allowance, BaseItem item)
+        private static object AwaitWithScope(Task task, FfProcessGuard.AllowanceHandle allowance)
         {
             var taskType = task.GetType();
             if (taskType == typeof(Task))
             {
-                return AwaitTask(task, allowance, item);
+                return AwaitTask(task, allowance);
             }
 
             if (taskType.IsGenericType && taskType.GetGenericTypeDefinition() == typeof(Task<>))
@@ -265,13 +254,13 @@ namespace MediaInfoKeeper.Patch
                 var method = typeof(ProviderManager)
                     .GetMethod(nameof(AwaitGenericTask), BindingFlags.Static | BindingFlags.NonPublic)
                     ?.MakeGenericMethod(resultType);
-                return method?.Invoke(null, new object[] { task, allowance, item }) ?? task;
+                return method?.Invoke(null, new object[] { task, allowance }) ?? task;
             }
 
             return task;
         }
 
-        private static async Task AwaitTask(Task task, FfProcessGuard.AllowanceHandle allowance, BaseItem item)
+        private static async Task AwaitTask(Task task, FfProcessGuard.AllowanceHandle allowance)
         {
             try
             {
@@ -283,7 +272,7 @@ namespace MediaInfoKeeper.Patch
             }
         }
 
-        private static async Task<T> AwaitGenericTask<T>(Task<T> task, FfProcessGuard.AllowanceHandle allowance, BaseItem item)
+        private static async Task<T> AwaitGenericTask<T>(Task<T> task, FfProcessGuard.AllowanceHandle allowance)
         {
             try
             {
@@ -294,6 +283,5 @@ namespace MediaInfoKeeper.Patch
                 FfProcessGuard.EndAllow(allowance);
             }
         }
-
     }
 }

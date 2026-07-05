@@ -144,7 +144,8 @@ namespace MediaInfoKeeper.Patch
                 Initialize = _ => ProviderManager.Initialize(logger, true),
                 Configure = _ => ProviderManager.Configure(true),
                 IsEnabled = options => IsPluginEnabled(options),
-                IsReady = () => ProviderManager.IsReady
+                IsReady = () => ProviderManager.IsReady,
+                Notes = () => "carry media item context for explicit ffprobe scopes"
             });
 
             registrations.Add(new PatchRegistration
