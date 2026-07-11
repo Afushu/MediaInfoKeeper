@@ -240,7 +240,8 @@ namespace MediaInfoKeeper.Patch
 
         private static string GetOriginalLanguage(BaseItem item, CancellationToken cancellationToken)
         {
-            var tmdbId = item.GetProviderId(MetadataProviders.Tmdb)?.Trim();
+            var lookupItem = GetTmdbLookupItem(item);
+            var tmdbId = lookupItem?.GetProviderId(MetadataProviders.Tmdb)?.Trim();
             if (string.IsNullOrWhiteSpace(tmdbId))
             {
                 return null;
@@ -253,6 +254,27 @@ namespace MediaInfoKeeper.Patch
             }
 
             return GetMovieDbOriginalLanguage(mediaType, tmdbId, cancellationToken);
+        }
+
+        private static BaseItem GetTmdbLookupItem(BaseItem item)
+        {
+            long seriesId;
+            if (item is Season season)
+            {
+                seriesId = season.SeriesId != 0 ? season.SeriesId : season.FindSeriesId();
+            }
+            else if (item is Episode episode)
+            {
+                seriesId = episode.SeriesId != 0 ? episode.SeriesId : episode.FindSeriesId();
+            }
+            else
+            {
+                return item;
+            }
+
+            return seriesId == 0
+                ? null
+                : Plugin.LibraryManager?.GetItemById(seriesId) as Series;
         }
 
         private static string GetTmdbMediaType(BaseItem item)
